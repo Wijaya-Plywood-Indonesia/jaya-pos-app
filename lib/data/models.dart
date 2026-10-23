@@ -43,17 +43,52 @@ class Cafe {
 }
 
 class Staff {
-  const Staff({required this.id, required this.name, this.role});
+  const Staff({required this.id, required this.name, this.role, this.outletId});
 
   final int id;
   final String name;
   final String? role;
+  final int? outletId;
 
   factory Staff.fromJson(Map<String, dynamic> j) => Staff(
         id: (j['id'] as num).toInt(),
         name: j['name'] as String,
         role: j['role'] as String?,
+        outletId: (j['outlet_id'] as num?)?.toInt(),
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'role': role,
+        'outlet_id': outletId,
+      };
+}
+
+/// Salinan daftar staf untuk login offline.
+/// [pins] hanya berisi hash PIN milik kasir (id staf -> hash bcrypt).
+class OfflineStaff {
+  const OfflineStaff({required this.staff, required this.pins});
+
+  final List<Staff> staff;
+  final Map<int, String> pins;
+
+  bool canLoginOffline(int userId) => pins.containsKey(userId);
+
+  factory OfflineStaff.fromJson(Map<String, dynamic> j) {
+    final rawPins = (j['pins'] as Map?) ?? const {};
+    return OfflineStaff(
+      staff: _list(j['staff'], Staff.fromJson),
+      pins: {
+        for (final e in rawPins.entries) int.parse(e.key.toString()): e.value as String,
+      },
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'staff': staff.map((s) => s.toJson()).toList(),
+        'pins': {for (final e in pins.entries) '${e.key}': e.value},
+      };
 }
 
 class AppUser {

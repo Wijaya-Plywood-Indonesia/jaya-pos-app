@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 
-/// Penyimpanan di perangkat: token di penyimpanan aman, data lain di preferences.
+/// Penyimpanan di perangkat: token dan hash PIN di penyimpanan aman, data lain di preferences.
 class SessionStore {
   SessionStore(this._prefs, this._secure);
 
@@ -18,6 +18,9 @@ class SessionStore {
   static const _kUser = 'user';
   static const _kMenu = 'menu_cache';
   static const _kToken = 'token';
+  static const _kOffline = 'offline_staff';
+  static const _kFails = 'pin_fails';
+  static const _kLockUntil = 'pin_lock_until';
 
   String? get baseUrl => _prefs.getString(_kBase);
   String? get slug => _prefs.getString(_kSlug);
@@ -38,9 +41,11 @@ class SessionStore {
   }
 
   Future<void> saveActivation(String baseUrl, String slug, Cafe cafe) async {
-    // Cafe berganti: buang cache menu cafe sebelumnya
+    // Cafe berganti: buang data cafe sebelumnya
     if (this.slug != slug) {
       await _prefs.remove(_kMenu);
+      await _secure.delete(key: _kOffline);
+      await resetPinFails();
     }
     await _prefs.setString(_kBase, baseUrl);
     await _prefs.setString(_kSlug, slug);
@@ -55,6 +60,42 @@ class SessionStore {
 
   Future<void> saveMenu(String json) => _prefs.setString(_kMenu, json);
 
+  // ---------- Login offline ----------
+
+  Future<OfflineStaff?> readOfflineStaff() async {
+    final raw = await _secure.read(key: _kOffline);
+    if (raw == null) return null;
+    try {
+      return OfflineStaff.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveOfflineStaff(OfflineStaff data) {
+    return _secure.write(key: _kOffline, value: jsonEncode(data.toJson()));
+  }
+
+  int get pinFails => _prefs.getInt(_kFails) ?? 0;
+
+  DateTime? get pinLockedUntil {
+    final ms = _prefs.getInt(_kLockUntil);
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  Future<void> savePinFails(int count, {DateTime? lockUntil}) async {
+    await _prefs.setInt(_kFails, count);
+    if (lockUntil != null) {
+      await _prefs.setInt(_kLockUntil, lockUntil.millisecondsSinceEpoch);
+    }
+  }
+
+  Future<void> resetPinFails() async {
+    await _prefs.remove(_kFails);
+    await _prefs.remove(_kLockUntil);
+  }
+
+  // Keluar akun: token dibuang, tetapi hash PIN kasir tetap ada supaya bisa masuk offline
   Future<void> clearLogin() async {
     await _secure.delete(key: _kToken);
     await _prefs.remove(_kUser);
@@ -62,6 +103,8 @@ class SessionStore {
 
   Future<void> clearAll() async {
     await clearLogin();
+    await _secure.delete(key: _kOffline);
+    await resetPinFails();
     await _prefs.remove(_kBase);
     await _prefs.remove(_kSlug);
     await _prefs.remove(_kCafe);

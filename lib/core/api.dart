@@ -10,6 +10,14 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Kena pembatas laju (server atau penguncian PIN offline). [until] = kapan boleh mencoba lagi.
+class RateLimitedException extends ApiException {
+  RateLimitedException(this.until)
+      : super('Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.', status: 429);
+
+  final DateTime until;
+}
+
 class Api {
   Api(String baseUrl, {this.token})
       : _dio = Dio(
@@ -50,11 +58,10 @@ class Api {
       if (status == 401) {
         throw ApiException('Sesi berakhir. Silakan masuk lagi.', status: 401);
       }
-      if (status == 429) {
-        throw ApiException(
-          'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.',
-          status: 429,
-        );
+            if (status == 429) {
+        // Laravel menyertakan sisa detik di header Retry-After
+        final secs = int.tryParse(e.response?.headers.value('retry-after') ?? '') ?? 60;
+        throw RateLimitedException(DateTime.now().add(Duration(seconds: secs)));
       }
 
       final body = e.response?.data;

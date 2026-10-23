@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,7 +8,20 @@ import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
+import '../session/online_controller.dart';
 import '../session/session_controller.dart';
+
+class _StaffResult {
+  const _StaffResult(this.staff, {required this.offline, required this.offlineIds});
+
+  final List<Staff> staff;
+
+  /// true = daftar diambil dari penyimpanan perangkat karena server tidak terjangkau
+  final bool offline;
+
+  /// id staf yang bisa masuk tanpa internet
+  final Set<int> offlineIds;
+}
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -18,11 +33,17 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   static const _pinLength = 4;
 
-  late Future<List<Staff>> _staff;
+  late Future<_StaffResult> _staff;
   Staff? _selected;
   String _pin = '';
   bool _busy = false;
+  bool _offlineList = false;
   String? _error;
+
+  // Hitung mundur saat PIN offline dikunci
+  Timer? _lockTimer;
+  DateTime? _lockUntil;
+  int _lockSecs = 0;
 
   @override
   void initState() {
@@ -30,11 +51,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _staff = _loadStaff();
   }
 
-  Future<List<Staff>> _loadStaff() async {
+  @override
+  void dispose() {
+    _lockTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Hitung sisa detik kunci dan jalankan penghitung per detik sampai habis.
+  void _tick() {
+    final until = _lockUntil;
+    final ms = until == null ? 0 : until.difference(DateTime.now()).inMilliseconds;
+
+    if (ms <= 0) {
+      _lockTimer?.cancel();
+      _lockTimer = null;
+      if (mounted) {
+        setState(() {
+          _lockUntil = null;
+          _lockSecs = 0;
+        });
+      }
+      return;
+    }
+
+    if (mounted) setState(() => _lockSecs = (ms / 1000).ceil());
+    _lockTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
+
+  Future<_StaffResult> _loadStaff() async {
     final s = ref.read(sessionProvider).requireValue;
-    final json = await Api(s.baseUrl!).get('/cafes/${s.slug}/staff');
-    final list = (json['staff'] as List?) ?? const [];
-    return list.map((e) => Staff.fromJson(e as Map<String, dynamic>)).toList();
+    final notifier = ref.read(sessionProvider.notifier);
+
+    try {
+      final json = await Api(s.baseUrl!).get('/cafes/${s.slug}/staff');
+      final list = ((json['staff'] as List?) ?? const [])
+          .map((e) => Staff.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final saved = await notifier.offlineStaff();
+
+      _offlineList = false;
+      ref.read(onlineProvider.notifier).report(true);
+      return _StaffResult(list, offline: false, offlineIds: saved?.pins.keys.toSet() ?? {});
+    } on ApiException catch (e) {
+      final unreachable = e.status == null || e.status! >= 500;
+      final saved = await notifier.offlineStaff();
+      if (!unreachable || saved == null) rethrow;
+
+      _offlineList = true;
+      ref.read(onlineProvider.notifier).report(false);
+      return _StaffResult(saved.staff, offline: true, offlineIds: saved.pins.keys.toSet());
+    }
   }
 
   void _reloadStaff() {
@@ -44,7 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _onDigit(String d) {
-    if (_busy || _pin.length >= _pinLength) return;
+    if (_busy || _lockSecs > 0 || _pin.length >= _pinLength) return;
     setState(() {
       _pin += d;
       _error = null;
@@ -53,7 +119,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _onBackspace() {
-    if (_busy || _pin.isEmpty) return;
+    if (_busy || _lockSecs > 0 || _pin.isEmpty) return;
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
 
@@ -67,7 +133,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(sessionProvider.notifier).login(staff.id, _pin);
+      await ref
+          .read(sessionProvider.notifier)
+          .login(staff, _pin, preferOffline: _offlineList);
+        } on RateLimitedException catch (e) {
+      if (mounted) {
+        setState(() {
+          _pin = '';
+          _error = null;
+          _lockUntil = e.until;
+        });
+        _tick();
+      }
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
@@ -82,6 +159,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Internet kembali saat di layar pilih akun: muat ulang daftar dari server
+    ref.listen<bool>(onlineProvider, (prev, next) {
+      if (prev == false && next == true && _selected == null) _reloadStaff();
+    });
+
     final cafe = ref.watch(sessionProvider).value?.cafe;
     final cafeName = cafe?.name ?? 'Jaya POS';
 
@@ -102,8 +184,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  Widget _banner(String text, IconData icon) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF92400E)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Color(0xFF92400E),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ---------- Tahap 1: pilih akun ----------
   Widget _staffStage(String cafeName) {
+    final notice = ref.watch(sessionProvider).value?.notice;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -121,7 +233,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           style: TextStyle(color: AppColors.muted(context)),
         ),
         const SizedBox(height: 20),
-        FutureBuilder<List<Staff>>(
+        if (notice != null) _banner(notice, Icons.info_outline),
+        FutureBuilder<_StaffResult>(
           future: _staff,
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
@@ -144,7 +257,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               );
             }
 
-            final staff = snap.data ?? const <Staff>[];
+            final result = snap.data!;
+            final staff = result.staff;
+
             if (staff.isEmpty) {
               return Text(
                 'Belum ada akun. Minta owner menambahkan staf di panel web.',
@@ -154,7 +269,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             }
 
             return Column(
-              children: [for (final s in staff) _staffTile(s)],
+              children: [
+                if (result.offline)
+                  _banner(
+                    'Mode offline. Hanya kasir yang bisa masuk.',
+                    Icons.cloud_off_outlined,
+                  ),
+                for (final s in staff)
+                  _staffTile(
+                    s,
+                    enabled: !result.offline || result.offlineIds.contains(s.id),
+                  ),
+              ],
             );
           },
         ),
@@ -167,44 +293,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _staffTile(Staff s) {
+  Widget _staffTile(Staff s, {required bool enabled}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => setState(() {
-          _selected = s;
-          _pin = '';
-          _error = null;
-        }),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.card(context),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.line(context)),
-          ),
-          child: Row(
-            children: [
-              Avatar(name: s.name, owner: s.role == 'owner', size: 44),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      s.name,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                    ),
-                    Text(
-                      roleLabel(s.role),
-                      style: TextStyle(color: AppColors.muted(context), fontSize: 13),
-                    ),
-                  ],
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            if (!enabled) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    s.role == 'cashier'
+                        ? 'Akun kasir ini belum tersimpan di perangkat. Sambungkan internet sekali.'
+                        : 'Owner dan manajer butuh internet untuk masuk.',
+                  ),
                 ),
-              ),
-              Icon(Icons.chevron_right, color: AppColors.muted(context)),
-            ],
+              );
+              return;
+            }
+            setState(() {
+              _selected = s;
+              _pin = '';
+              _error = null;
+              // Kunci PIN offline masih berlaku? Tampilkan hitung mundurnya langsung
+              _lockUntil = _offlineList ? ref.read(storeProvider).pinLockedUntil : null;
+            });
+            _tick();
+          },
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.card(context),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.line(context)),
+            ),
+            child: Row(
+              children: [
+                Avatar(name: s.name, owner: s.role == 'owner', size: 44),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        s.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                      ),
+                      Text(
+                        enabled ? roleLabel(s.role) : '${roleLabel(s.role)} · butuh internet',
+                        style: TextStyle(color: AppColors.muted(context), fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  enabled ? Icons.chevron_right : Icons.lock_outline,
+                  color: AppColors.muted(context),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -215,6 +364,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget _pinStage() {
     final staff = _selected!;
     final accent = Theme.of(context).colorScheme.primary;
+    final locked = _lockSecs > 0;
+    final message = locked
+        ? 'Terlalu banyak percobaan. Coba lagi dalam $_lockSecs detik.'
+        : _error;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -255,10 +408,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         SizedBox(
           height: 36,
           child: Center(
-            child: _error == null
+            child: message == null
                 ? null
                 : Text(
-                    _error!,
+                    message,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
@@ -267,7 +420,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
           ),
         ),
-        _PinPad(onDigit: _onDigit, onBackspace: _onBackspace),
+        // Selama dikunci, tombol angka dipudarkan dan tidak bisa ditekan
+        Opacity(
+          opacity: locked ? 0.4 : 1,
+          child: IgnorePointer(
+            ignoring: locked,
+            child: _PinPad(onDigit: _onDigit, onBackspace: _onBackspace),
+          ),
+        ),
         const SizedBox(height: 8),
         TextButton(
           onPressed: _busy

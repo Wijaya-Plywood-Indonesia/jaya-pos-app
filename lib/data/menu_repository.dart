@@ -18,7 +18,10 @@ class MenuRepository {
   final SessionStore store;
 
   /// Ambil menu dari server. Bila server tidak terjangkau, pakai salinan terakhir di perangkat.
-  Future<MenuResult> load() async {
+  /// [skipNetwork] dipakai saat masuk lewat PIN offline (belum punya token).
+  Future<MenuResult> load({bool skipNetwork = false}) async {
+    if (skipNetwork) return _fromCache() ?? (throw _noCache());
+
     try {
       final json = await api.get('/menu');
       await store.saveMenu(jsonEncode(json));
@@ -27,13 +30,23 @@ class MenuRepository {
       // Token ditolak: bukan masalah koneksi, jangan pakai cache
       if (e.status == 401) rethrow;
 
-      final cached = store.menuCache;
+      final cached = _fromCache();
       if (cached == null) rethrow;
-
-      return MenuResult(
-        MenuData.fromJson(jsonDecode(cached) as Map<String, dynamic>),
-        fromCache: true,
-      );
+      return cached;
     }
+  }
+
+  MenuResult? _fromCache() {
+    final cached = store.menuCache;
+    if (cached == null) return null;
+
+    return MenuResult(
+      MenuData.fromJson(jsonDecode(cached) as Map<String, dynamic>),
+      fromCache: true,
+    );
+  }
+
+  ApiException _noCache() {
+    return ApiException('Menu belum tersimpan di perangkat. Sambungkan internet dulu.');
   }
 }

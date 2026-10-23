@@ -7,6 +7,9 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/menu_repository.dart';
 import '../../data/models.dart';
+import '../session/connection_chip.dart';
+import '../session/logout_flow.dart';
+import '../session/online_controller.dart';
 import '../session/session_controller.dart';
 
 class PosScreen extends ConsumerStatefulWidget {
@@ -26,13 +29,25 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     _menu = _load();
   }
 
-  Future<MenuResult> _load() {
+  Future<MenuResult> _load() async {
     final s = ref.read(sessionProvider).requireValue;
     final repo = MenuRepository(
       Api(s.baseUrl!, token: s.token),
       ref.read(storeProvider),
     );
-    return repo.load();
+
+    // Masuk lewat PIN offline: belum punya token, langsung pakai salinan menu
+    final result = await repo.load(skipNetwork: s.offline);
+
+    if (!s.offline) {
+      ref.read(onlineProvider.notifier).report(!result.fromCache);
+      if (!result.fromCache) {
+        // Perbarui hash PIN kasir untuk login offline berikutnya
+        ref.read(sessionProvider.notifier).refreshOfflineStaff();
+      }
+    }
+
+    return result;
   }
 
   void _reload() {
@@ -45,6 +60,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   Widget build(BuildContext context) {
     final s = ref.watch(sessionProvider).value;
     if (s == null) return const SizedBox.shrink();
+
+    // Token offline berhasil didapat setelah internet kembali: muat menu terbaru
+    ref.listen(sessionProvider, (prev, next) {
+      final wasOffline = prev?.value?.offline ?? false;
+      final isOffline = next.value?.offline ?? false;
+      if (wasOffline && !isOffline && next.value?.phase == Phase.pos) _reload();
+    });
 
     final cafeName = s.cafe?.name ?? 'Jaya POS';
     final user = s.user;
@@ -70,6 +92,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ],
         ),
         actions: [
+          const ConnectionChip(),
+          const SizedBox(width: 4),
           IconButton(
             tooltip: 'Muat ulang menu',
             icon: const Icon(Icons.refresh),
@@ -78,7 +102,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           if (user != null)
             PopupMenuButton<String>(
               onSelected: (v) {
-                if (v == 'logout') ref.read(sessionProvider.notifier).logout();
+                if (v == 'logout') confirmLogout(context, ref);
               },
               itemBuilder: (_) => [
                 PopupMenuItem<String>(
@@ -284,7 +308,7 @@ class _ProductCard extends StatelessWidget {
                     Image.network(
                       '$baseUrl$path',
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => placeholder(),
+                      errorBuilder: (_, _, _) => placeholder(),
                     )
                   else
                     placeholder(),

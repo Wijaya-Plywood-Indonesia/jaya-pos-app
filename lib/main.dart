@@ -4,10 +4,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme.dart';
+import 'data/local_db.dart';
 import 'data/session_store.dart';
 import 'features/auth/activation_screen.dart';
 import 'features/auth/login_screen.dart';
-import 'features/pos/pos_screen.dart';
+import 'features/home/home_shell.dart';
 import 'features/session/session_controller.dart';
 
 Future<void> main() async {
@@ -15,10 +16,14 @@ Future<void> main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final store = SessionStore(prefs, const FlutterSecureStorage());
+  final db = await LocalDb.open();
 
   runApp(
     ProviderScope(
-      overrides: [storeProvider.overrideWithValue(store)],
+      overrides: [
+        storeProvider.overrideWithValue(store),
+        localDbProvider.overrideWithValue(db),
+      ],
       child: const JayaApp(),
     ),
   );
@@ -58,7 +63,7 @@ class Gate extends ConsumerWidget {
       data: (s) => switch (s.phase) {
         Phase.activation => const ActivationScreen(),
         Phase.login => const LoginScreen(),
-        Phase.pos => const PosScreen(),
+        Phase.pos => const HomeShell(),
       },
     );
   }

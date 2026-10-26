@@ -253,7 +253,7 @@ class SessionController extends AsyncNotifier<SessionState> {
     return saved?.canLoginOffline(user.id) ?? false;
   }
 
-  Future<void> logout() async {
+    Future<void> logout({String? notice}) async {
     final s = state.requireValue;
 
     if (s.token != null && s.baseUrl != null) {
@@ -264,7 +264,7 @@ class SessionController extends AsyncNotifier<SessionState> {
       }
     }
 
-    await expire();
+    await expire(notice: notice);
   }
 
   /// Token tidak berlaku lagi (dicabut atau kedaluwarsa): kembali ke layar pilih akun.

@@ -31,11 +31,43 @@ class AppColors {
   static ThemeData theme(Brightness b, Color accent) {
     final dark = b == Brightness.dark;
 
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    const label = TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700);
+    const padding = EdgeInsets.symmetric(horizontal: 16);
+
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'Inter',
       colorScheme: ColorScheme.fromSeed(seedColor: accent, brightness: b)
           .copyWith(primary: accent, onPrimary: Colors.white),
       scaffoldBackgroundColor: dark ? _bgDark : _bgLight,
+      // Tombol seperti mockup: tinggi 46, sudut 12, huruf tebal
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 46),
+          padding: padding,
+          shape: shape,
+          textStyle: label,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 46),
+          padding: padding,
+          shape: shape,
+          textStyle: label,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          shape: shape,
+          textStyle: label,
+        ),
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        hintStyle: TextStyle(fontSize: 14),
+      ),
     );
   }
 }

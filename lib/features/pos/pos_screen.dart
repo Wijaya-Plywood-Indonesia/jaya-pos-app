@@ -4,11 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/format.dart';
 import '../../core/theme.dart';
-import '../../core/widgets.dart';
 import '../../data/menu_repository.dart';
 import '../../data/models.dart';
-import '../session/connection_chip.dart';
-import '../session/logout_flow.dart';
 import '../session/online_controller.dart';
 import '../session/session_controller.dart';
 
@@ -68,78 +65,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       if (wasOffline && !isOffline && next.value?.phase == Phase.pos) _reload();
     });
 
-    final cafeName = s.cafe?.name ?? 'Jaya POS';
-    final user = s.user;
+    return FutureBuilder<MenuResult>(
+      future: _menu,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: AppColors.card(context),
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            BrandMark(letter: initialOf(cafeName), size: 32),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                cafeName,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          const ConnectionChip(),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: 'Muat ulang menu',
-            icon: const Icon(Icons.refresh),
-            onPressed: _reload,
-          ),
-          if (user != null)
-            PopupMenuButton<String>(
-              onSelected: (v) {
-                if (v == 'logout') confirmLogout(context, ref);
-              },
-              itemBuilder: (_) => [
-                PopupMenuItem<String>(
-                  enabled: false,
-                  child: Text('${user.name} · ${roleLabel(user.role)}'),
-                ),
-                const PopupMenuItem<String>(value: 'logout', child: Text('Keluar')),
-              ],
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  children: [
-                    Avatar(name: user.name, owner: user.role == 'owner', size: 34),
-                    const Icon(Icons.arrow_drop_down),
-                  ],
-                ),
-              ),
-            ),
-          const SizedBox(width: 8),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Divider(height: 1, color: AppColors.line(context)),
-        ),
-      ),
-      body: FutureBuilder<MenuResult>(
-        future: _menu,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        if (snap.hasError) return _errorView(snap.error);
 
-          if (snap.hasError) return _errorView(snap.error);
-
-          return _content(snap.data!, s.baseUrl!);
-        },
-      ),
+        return _content(snap.data!, s.baseUrl!);
+      },
     );
   }
 

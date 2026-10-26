@@ -38,6 +38,13 @@ class OnlineController extends Notifier<bool> {
     } finally {
       _checking = false;
     }
+
+    // Server terjangkau tetapi sesi masih offline (percobaan sebelumnya gagal,
+    // misalnya kena batas laju): coba ambil token lagi. goOnline() tidak melakukan
+    // apa-apa bila sesi sudah online, dan menolak berjalan dua kali bersamaan.
+    if (state) {
+      await ref.read(sessionProvider.notifier).goOnline();
+    }
   }
 
   /// Dilaporkan juga oleh bagian lain yang baru saja memanggil server.

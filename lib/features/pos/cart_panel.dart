@@ -7,6 +7,8 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/order_models.dart';
 import '../session/session_controller.dart';
+import 'bills_controller.dart';
+import 'bills_sheet.dart';
 import 'cart_controller.dart';
 import 'pos_widgets.dart';
 
@@ -25,6 +27,23 @@ class CartPanel extends ConsumerWidget {
 
   /// Hanya diisi di HP (tombol turun di pojok kiri atas).
   final VoidCallback? onClose;
+
+  /// Simpan pesanan aktif sebagai bill, lalu kosongkan keranjang.
+  Future<void> _saveBill(
+    BuildContext context,
+    WidgetRef ref,
+    CartState cart,
+    DiningTableInfo? table,
+  ) async {
+    await ref.read(billsProvider.notifier).save(cart: cart, table: table);
+    ref.read(cartProvider.notifier).clear();
+
+    if (context.mounted) {
+      showToast(context, 'Bill disimpan. Buka lagi lewat ikon penanda.');
+    }
+
+    onClose?.call();
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -82,6 +101,12 @@ class CartPanel extends ConsumerWidget {
                       ),
                     ],
                   ),
+                ),
+                _BillsButton(
+                  onTap: () async {
+                    final opened = await showBillsSheet(context);
+                    if (opened == true && context.mounted) showToast(context, 'Bill dibuka');
+                  },
                 ),
                 SquareIconButton(
                   icon: Icons.delete_outline,
@@ -167,9 +192,27 @@ class CartPanel extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: cart.isEmpty ? null : onPay,
-                      child: Text(cart.isEmpty ? 'Bayar' : 'Bayar · ${rp(totals.total)}'),
+                    Row(
+                      spacing: 8,
+                      children: [
+                        Expanded(
+                          child: TintButton(
+                            label: 'Simpan bill',
+                            onPressed: cart.isEmpty
+                                ? null
+                                : () => _saveBill(context, ref, cart, table),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: FilledButton(
+                            onPressed: cart.isEmpty ? null : onPay,
+                            child: Text(
+                              cart.isEmpty ? 'Bayar' : 'Bayar · ${rp(totals.total)}',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -419,6 +462,56 @@ class _Toggle extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Ikon penanda bill tersimpan, dengan angka jumlahnya.
+class _BillsButton extends ConsumerWidget {
+  const _BillsButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(billCountProvider);
+    final accent = Theme.of(context).colorScheme.primary;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        SquareIconButton(
+          icon: count > 0 ? Icons.bookmark : Icons.bookmark_border,
+          label: 'Bill tersimpan',
+          onTap: onTap,
+        ),
+        if (count > 0)
+          Positioned(
+            top: -4,
+            right: -4,
+            child: IgnorePointer(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18),
+                height: 18,
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: AppColors.card(context), width: 2),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

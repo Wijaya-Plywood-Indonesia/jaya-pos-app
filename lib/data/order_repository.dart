@@ -91,6 +91,8 @@ class OrderRepository {
         'method': method,
         'total': totals.total,
         'synced': 0,
+        'kitchen_status': 'new',
+        'kitchen_dirty': 0,
         'json': jsonEncode(order.toJson()),
       });
     });
@@ -103,6 +105,7 @@ class OrderRepository {
       jsonDecode(r['json'] as String) as Map<String, dynamic>,
       synced: (r['synced'] as int) == 1,
       status: r['status'] as String,
+      kitchenStatus: r['kitchen_status'] as String?,
     );
   }
 
@@ -117,6 +120,73 @@ class OrderRepository {
     );
 
     return rows.map(_fromRow).toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Antrian
+  // ---------------------------------------------------------------------------
+
+  /// Pesanan yang masih harus dikerjakan atau diserahkan (baru dan siap diambil),
+  /// yang paling lama di atas. Hanya 24 jam terakhir, supaya pesanan yang lupa
+  /// ditandai tidak menumpuk selamanya.
+  Future<List<PaidOrder>> queue(int cafeId) async {
+    final since = DateTime.now().subtract(const Duration(hours: 24)).millisecondsSinceEpoch;
+
+    final rows = await _db.query(
+      'orders',
+      where: "cafe_id = ? AND status = 'paid' "
+          "AND kitchen_status IN ('new', 'ready') AND created_at >= ?",
+      whereArgs: [cafeId, since],
+      orderBy: 'created_at ASC',
+    );
+
+    return rows.map(_fromRow).toList();
+  }
+
+  /// Ubah status antrian. Ditandai belum terkirim ke server (kitchen_dirty = 1).
+  Future<void> setKitchenStatus(String id, String status) {
+    return _db.update(
+      'orders',
+      {'kitchen_status': status, 'kitchen_dirty': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Jumlah perubahan status antrian yang belum terkirim ke server.
+  Future<int> dirtyKitchenCount(int cafeId) async {
+    return Sqflite.firstIntValue(
+          await _db.rawQuery(
+            'SELECT COUNT(*) FROM orders WHERE cafe_id = ? AND kitchen_dirty = 1',
+            [cafeId],
+          ),
+        ) ??
+        0;
+  }
+
+  /// Perubahan status yang siap dikirim: transaksinya sudah ada di server.
+  Future<List<({String id, String status})>> dirtyKitchen(int cafeId) async {
+    final rows = await _db.query(
+      'orders',
+      columns: ['id', 'kitchen_status'],
+      where: 'cafe_id = ? AND kitchen_dirty = 1 AND synced = 1',
+      whereArgs: [cafeId],
+      orderBy: 'created_at ASC',
+    );
+
+    return [
+      for (final r in rows) (id: r['id'] as String, status: r['kitchen_status'] as String),
+    ];
+  }
+
+  /// Hanya dibersihkan bila status belum berubah lagi selama pengiriman.
+  Future<void> markKitchenSynced(String id, String status) {
+    return _db.update(
+      'orders',
+      {'kitchen_dirty': 0},
+      where: 'id = ? AND kitchen_status = ?',
+      whereArgs: [id, status],
+    );
   }
 
   // ---------------------------------------------------------------------------

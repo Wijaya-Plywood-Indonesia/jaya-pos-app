@@ -218,6 +218,7 @@ class PaidOrder {
     this.customerName,
     this.status = 'paid',
     this.synced = false,
+    this.kitchenStatus = 'new',
   });
 
   final String id;
@@ -248,6 +249,9 @@ class PaidOrder {
   /// Sudah terkirim ke server atau belum.
   final bool synced;
 
+  /// Status antrian: new (baru), ready (siap diambil), served (sudah diserahkan).
+  final String kitchenStatus;
+
   String get where => orderWhere(type, tableName: tableName, customerName: customerName);
 
   String get methodLabel => paymentLabels[method] ?? method;
@@ -269,6 +273,7 @@ class PaidOrder {
             ? null
             : customerName!.trim(),
         'status': status,
+        'kitchen_status': kitchenStatus,
         'items': items.map((l) => l.toJson()).toList(),
         'subtotal': totals.subtotal,
         'discount_total': totals.discount,
@@ -293,6 +298,7 @@ class PaidOrder {
     Map<String, dynamic> j, {
     bool synced = false,
     String? status,
+    String? kitchenStatus,
   }) {
     final pay = (j['payment'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     int n(String k) => (j[k] as num?)?.toInt() ?? 0;
@@ -328,6 +334,7 @@ class PaidOrder {
       orderedAt: DateTime.parse(j['ordered_at'] as String).toLocal(),
       status: status ?? (j['status'] as String?) ?? 'paid',
       synced: synced,
+      kitchenStatus: kitchenStatus ?? (j['kitchen_status'] as String?) ?? 'new',
     );
   }
 }

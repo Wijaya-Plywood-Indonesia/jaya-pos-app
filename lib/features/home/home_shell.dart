@@ -11,17 +11,22 @@ import '../shift/shift_controller.dart';
 import '../shift/shift_widgets.dart';
 import '../pos/pos_widgets.dart';
 import '../pos/sync_controller.dart';
+import '../queue/queue_controller.dart';
+import '../queue/queue_screen.dart';
 
 const _navBg = Color(0xFF111111);
 const _navIdle = Color(0xFF9CA3AF);
 
 class _TabDef {
-  _TabDef(this.label, this.title, this.icon, this.builder);
+  _TabDef(this.label, this.title, this.icon, this.builder, {this.badge = 0});
 
   final String label;
   final String title;
   final IconData icon;
   final Widget Function() builder;
+
+  /// Angka merah di ikon menu (0 = tidak tampil).
+  final int badge;
 }
 
 class HomeShell extends ConsumerStatefulWidget {
@@ -59,6 +64,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
     final shift = ref.watch(shiftProvider);
     final isOwner = user.role == 'owner';
+    final newOrders = ref.watch(queueNewCountProvider);
 
     final tabs = <_TabDef>[
       _TabDef('Kasir', 'Kasir', Icons.shopping_bag_outlined, () => const PosScreen()),
@@ -66,10 +72,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         'Antrian',
         'Antrian pesanan',
         Icons.format_list_bulleted,
-        () => const _ComingSoon(
-          icon: Icons.format_list_bulleted,
-          text: 'Antrian dapur: pesanan Baru dan Siap diambil.',
-        ),
+        () => const QueueScreen(),
+        badge: newOrders,
       ),
       _TabDef(
         'Riwayat',
@@ -229,6 +233,7 @@ class _Nav extends StatelessWidget {
           label: tabs[i].label,
           icon: tabs[i].icon,
           active: i == index,
+          badge: tabs[i].badge,
           onTap: () => onTap(i),
         ),
     ];
@@ -265,12 +270,14 @@ class _NavItem extends StatelessWidget {
     required this.icon,
     required this.active,
     required this.onTap,
+    this.badge = 0,
   });
 
   final String label;
   final IconData icon;
   final bool active;
   final VoidCallback onTap;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -283,14 +290,43 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 48,
-              height: 28,
-              decoration: BoxDecoration(
-                color: active ? primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, size: 19, color: active ? Colors.white : _navIdle),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 48,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: active ? primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, size: 19, color: active ? Colors.white : _navIdle),
+                ),
+                if (badge > 0)
+                  Positioned(
+                    top: -5,
+                    right: -3,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 17),
+                      height: 17,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(color: _navBg, width: 2),
+                      ),
+                      child: Text(
+                        '$badge',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 3),
             Text(

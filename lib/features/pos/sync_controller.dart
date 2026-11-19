@@ -101,7 +101,9 @@ class SyncController extends Notifier<SyncState> {
       final shiftList = await shifts.pendingForSync(cafeId, retryFailed: retryFailed);
       final orderList = await orders.pending(cafeId, retryFailed: retryFailed);
 
-      if (shiftList.isEmpty && orderList.isEmpty) {
+      final kitchenCount = await orders.dirtyKitchenCount(cafeId);
+
+      if (shiftList.isEmpty && orderList.isEmpty && kitchenCount == 0) {
         _announce = false;
         await _refreshPending();
         return;
@@ -111,6 +113,7 @@ class SyncController extends Notifier<SyncState> {
       state = state.copyWith(syncing: true);
 
       var stop = false;
+      var halted = false;
       final rejectedShifts = <String>{};
 
       // 1. Shift dulu
@@ -141,8 +144,27 @@ class SyncController extends Notifier<SyncState> {
           } else if (outcome == _Outcome.rejected) {
             await orders.markFailed(o.id, error ?? 'Ditolak server');
           } else {
+            halted = true;
             break;
           }
+        }
+      }
+
+      // 3. Terakhir, perubahan status antrian (Baru, Siap, Selesai).
+      // Dicari setelah transaksi terkirim, supaya yang baru terkirim ikut diproses.
+      if (!stop && !halted) {
+        for (final k in await orders.dirtyKitchen(cafeId)) {
+          final (outcome, _) = await _post(
+            api,
+            '/orders/${k.id}/kitchen-status',
+            {'status': k.status},
+          );
+
+          if (outcome == _Outcome.retryLater) break;
+
+          // Diterima, atau ditolak server (misalnya transaksinya tidak ada):
+          // jangan dikirim ulang terus-menerus
+          await orders.markKitchenSynced(k.id, k.status);
         }
       }
     } finally {

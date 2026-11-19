@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/bill_repository.dart';
 import '../../data/order_models.dart';
 import '../session/session_controller.dart';
 
@@ -92,6 +93,29 @@ class CartController extends Notifier<CartState> {
   }
 
   void setName(String name) => state = state.copyWith(customerName: name);
+
+  /// Buka bill tersimpan: barisnya digabung ke pesanan aktif (menu yang sama
+  /// dijumlahkan), jenis pesanan, meja, dan nama pelanggan mengikuti bill.
+  void restore(SavedBill bill) {
+    final lines = [...state.lines];
+
+    for (final l in bill.lines) {
+      final i = lines.indexWhere((x) => x.key == l.key);
+
+      if (i >= 0) {
+        lines[i] = lines[i].copyWith(qty: lines[i].qty + l.qty);
+      } else {
+        lines.add(l);
+      }
+    }
+
+    state = CartState(
+      lines: lines,
+      type: bill.type,
+      tableId: bill.tableId,
+      customerName: bill.customerName ?? '',
+    );
+  }
 
   /// Kosongkan pesanan. Jenis pesanan (Dine In / Take Away) tetap dipertahankan.
   void clear() => state = CartState(type: state.type);

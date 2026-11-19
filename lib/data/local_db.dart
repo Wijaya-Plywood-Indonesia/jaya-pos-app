@@ -19,7 +19,7 @@ class LocalDb {
 
     final db = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE shifts (
@@ -50,11 +50,14 @@ class LocalDb {
             total INTEGER NOT NULL,
             synced INTEGER NOT NULL DEFAULT 0,
             json TEXT NOT NULL,
-            sync_error TEXT
+            sync_error TEXT,
+            kitchen_status TEXT NOT NULL DEFAULT 'new',
+            kitchen_dirty INTEGER NOT NULL DEFAULT 0
           )
         ''');
 
         await db.execute('CREATE INDEX idx_orders_shift ON orders(shift_id)');
+        await _createBills(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         // Versi 2: catatan alasan bila server menolak sebuah data
@@ -62,9 +65,37 @@ class LocalDb {
           await db.execute('ALTER TABLE shifts ADD COLUMN sync_error TEXT');
           await db.execute('ALTER TABLE orders ADD COLUMN sync_error TEXT');
         }
+
+        // Versi 3: status antrian (new, ready, served) dan bill tersimpan
+        if (oldVersion < 3) {
+          await db.execute(
+            "ALTER TABLE orders ADD COLUMN kitchen_status TEXT NOT NULL DEFAULT 'new'",
+          );
+          await db.execute(
+            'ALTER TABLE orders ADD COLUMN kitchen_dirty INTEGER NOT NULL DEFAULT 0',
+          );
+
+          // Transaksi lama dianggap sudah selesai supaya tidak membanjiri antrian.
+          // kitchen_dirty = 1 agar server ikut diberi tahu.
+          await db.execute("UPDATE orders SET kitchen_status = 'served', kitchen_dirty = 1");
+
+          await _createBills(db);
+        }
       },
     );
 
     return LocalDb._(db);
+  }
+
+  /// Bill = pesanan yang disimpan dulu sebelum dibayar. Hanya ada di tablet.
+  static Future<void> _createBills(Database db) {
+    return db.execute('''
+      CREATE TABLE bills (
+        id TEXT PRIMARY KEY,
+        cafe_id INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        json TEXT NOT NULL
+      )
+    ''');
   }
 }

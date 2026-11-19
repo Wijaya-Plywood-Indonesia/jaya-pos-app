@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../history/history_screen.dart';
 import '../pos/pos_screen.dart';
 import '../session/connection_chip.dart';
 import '../session/session_controller.dart';
 import '../shift/shift_controller.dart';
 import '../shift/shift_widgets.dart';
+import '../pos/pos_widgets.dart';
+import '../pos/sync_controller.dart';
 
 const _navBg = Color(0xFF111111);
 const _navIdle = Color(0xFF9CA3AF);
@@ -32,9 +35,27 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
 
   @override
+  void initState() {
+    super.initState();
+
+    // Aplikasi dibuka atau akun masuk: kirim yang tertunda, termasuk yang sempat ditolak
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(syncProvider.notifier).run(retryFailed: true);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = ref.watch(sessionProvider).value?.user;
     if (user == null) return const SizedBox.shrink();
+
+    // "Online lagi. N transaksi disinkronkan"
+    ref.listen(syncProvider.select((s) => s.batchId), (prev, next) {
+      final sync = ref.read(syncProvider);
+      if (sync.announce && sync.lastBatch > 0) {
+        showToast(context, 'Online lagi. ${sync.lastBatch} transaksi disinkronkan');
+      }
+    });
 
     final shift = ref.watch(shiftProvider);
     final isOwner = user.role == 'owner';
@@ -54,10 +75,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         'Riwayat',
         'Riwayat transaksi',
         Icons.receipt_long_outlined,
-        () => const _ComingSoon(
-          icon: Icons.receipt_long_outlined,
-          text: 'Riwayat transaksi, cetak ulang, dan void.',
-        ),
+        () => const HistoryScreen(),
       ),
       _TabDef(
         'Stok',

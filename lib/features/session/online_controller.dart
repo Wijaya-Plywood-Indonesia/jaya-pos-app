@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import 'session_controller.dart';
+import '../pos/sync_controller.dart';
 
 /// true = server terjangkau. Dicek tiap 15 detik dan setiap ada hasil panggilan API.
 final onlineProvider = NotifierProvider<OnlineController, bool>(OnlineController.new);
@@ -42,22 +43,31 @@ class OnlineController extends Notifier<bool> {
     // Server terjangkau tetapi sesi masih offline (percobaan sebelumnya gagal,
     // misalnya kena batas laju): coba ambil token lagi. goOnline() tidak melakukan
     // apa-apa bila sesi sudah online, dan menolak berjalan dua kali bersamaan.
-    if (state) {
+        if (state) {
       await ref.read(sessionProvider.notifier).goOnline();
+
+      // Kirim transaksi yang tertunda (tidak melakukan apa-apa bila tidak ada)
+      ref.read(syncProvider.notifier).run();
     }
   }
 
-  /// Dilaporkan juga oleh bagian lain yang baru saja memanggil server.
+    /// Dilaporkan juga oleh bagian lain yang baru saja memanggil server.
   void report(bool online) {
     final wasOffline = !state;
     if (state != online) state = online;
 
-    if (wasOffline && online) _onBackOnline();
+    if (wasOffline && online) {
+      // Putaran kirim berikutnya akan diumumkan ke kasir
+      ref.read(syncProvider.notifier).announceNext();
+      _onBackOnline();
+    }
   }
 
   Future<void> _onBackOnline() async {
     final session = ref.read(sessionProvider.notifier);
     await session.goOnline();
     await session.refreshOfflineStaff();
+    await session.refreshCafe();
+    ref.read(syncProvider.notifier).run();
   }
 }

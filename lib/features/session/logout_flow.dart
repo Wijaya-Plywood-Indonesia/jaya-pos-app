@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'online_controller.dart';
 import 'session_controller.dart';
+import '../pos/sync_controller.dart';
 
 /// true bila boleh lanjut keluar: sedang online, atau akun ini bisa masuk lagi tanpa
 /// internet, atau pengguna menyetujui peringatan.
@@ -42,6 +43,12 @@ Future<bool> confirmLeave(BuildContext context, WidgetRef ref) async {
 /// Keluar akun, dengan peringatan bila sedang offline.
 Future<void> confirmLogout(BuildContext context, WidgetRef ref) async {
   if (!await confirmLeave(context, ref)) return;
+
+  // Kirim transaksi yang tertunda selagi token masih berlaku
+  await ref
+      .read(syncProvider.notifier)
+      .run()
+      .timeout(const Duration(seconds: 8), onTimeout: () {});
 
   await ref.read(sessionProvider.notifier).logout();
 }

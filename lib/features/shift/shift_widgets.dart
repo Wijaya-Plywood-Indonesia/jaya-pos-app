@@ -9,6 +9,7 @@ import '../../data/shift_repository.dart';
 import '../session/logout_flow.dart';
 import '../session/session_controller.dart';
 import 'shift_controller.dart';
+import '../pos/sync_controller.dart';
 
 const _methodLabels = {'cash': 'Tunai', 'qris': 'QRIS', 'card': 'Debit'};
 
@@ -264,7 +265,14 @@ Future<void> showCloseShiftDialog(BuildContext context, WidgetRef ref) async {
       ? 'Shift ditutup. Kas pas.'
       : 'Shift ditutup. Selisih kas ${diff > 0 ? 'lebih' : 'kurang'} ${rp(diff.abs())}.';
 
-  await ref.read(shiftProvider.notifier).close(counted);
+    await ref.read(shiftProvider.notifier).close(counted);
+
+  // Kirim data tutup shift dan transaksi selagi token masih berlaku
+  await ref
+      .read(syncProvider.notifier)
+      .run()
+      .timeout(const Duration(seconds: 8), onTimeout: () {});
+
   await ref.read(sessionProvider.notifier).logout(notice: notice);
 }
 

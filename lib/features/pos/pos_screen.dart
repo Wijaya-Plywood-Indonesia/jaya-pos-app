@@ -3,11 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../core/format.dart';
+import '../../core/sheet.dart';
 import '../../core/theme.dart';
 import '../../data/menu_repository.dart';
 import '../../data/models.dart';
+import '../../data/order_models.dart';
 import '../session/online_controller.dart';
 import '../session/session_controller.dart';
+import 'cart_controller.dart';
+import 'cart_panel.dart';
+import 'option_sheet.dart';
+import 'pay_sheet.dart';
+import 'pos_widgets.dart';
+import 'receipt_sheet.dart';
 
 class PosScreen extends ConsumerStatefulWidget {
   const PosScreen({super.key});
@@ -18,12 +26,20 @@ class PosScreen extends ConsumerStatefulWidget {
 
 class _PosScreenState extends ConsumerState<PosScreen> {
   late Future<MenuResult> _menu;
+  final _search = TextEditingController();
   int? _categoryId;
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
     _menu = _load();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
   Future<MenuResult> _load() async {
@@ -41,6 +57,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       if (!result.fromCache) {
         // Perbarui hash PIN kasir untuk login offline berikutnya
         ref.read(sessionProvider.notifier).refreshOfflineStaff();
+        ref.read(sessionProvider.notifier).refreshCafe();
       }
     }
 
@@ -53,6 +70,68 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Aksi kasir
+  // ---------------------------------------------------------------------------
+  Future<void> _openOptions(Product p, MenuData data) async {
+    final groups = data.optionGroups
+        .where((g) => p.optionGroupIds.contains(g.id))
+        .toList();
+
+    final line = await showOptionSheet(context, product: p, groups: groups);
+
+    if (line != null && mounted) {
+      showToast(context, '${line.name} ×${line.qty} masuk pesanan');
+    }
+  }
+
+  Future<void> _pay(MenuData data) async {
+    final cart = ref.read(cartProvider);
+
+    if (cart.isEmpty) {
+      showToast(context, 'Pesanan masih kosong', warn: true);
+      return;
+    }
+
+    final table = data.tables.where((t) => t.id == cart.tableId).firstOrNull;
+
+    final order = await showAppSheet<PaidOrder>(
+      context,
+      (_) => PaySheet(table: table),
+    );
+    if (order == null || !mounted) return;
+
+    ref.read(cartProvider.notifier).clear();
+    await showReceiptSheet(context, order, isNew: true);
+  }
+
+  /// HP: pesanan aktif muncul dari bawah.
+  void _openCartSheet(MenuData data) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 0.92,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: CartPanel(
+            tables: data.tables,
+            onClose: () => Navigator.pop(ctx),
+            onPay: () {
+              Navigator.pop(ctx);
+              _pay(data);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tampilan
+  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(sessionProvider).value;
@@ -95,7 +174,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(api?.message ?? 'Gagal memuat menu.', textAlign: TextAlign.center),
+            Text(
+              api?.message ?? 'Gagal memuat menu.',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 12),
             OutlinedButton(onPressed: _reload, child: const Text('Coba lagi')),
           ],
@@ -106,11 +188,55 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
   Widget _content(MenuResult result, String baseUrl) {
     final data = result.data;
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Tablet: katalog di kiri, pesanan aktif menempel di kanan.
+        // HP: katalog penuh, pesanan aktif dibuka dari tombol di bawah.
+        final wide = c.maxWidth >= 600;
+        final catalog = _catalog(result, baseUrl, wide);
+
+        if (wide) {
+          return Row(
+            children: [
+              Expanded(child: catalog),
+              SizedBox(
+                width: 310,
+                child: CartPanel(tables: data.tables, onPay: () => _pay(data)),
+              ),
+            ],
+          );
+        }
+
+        return Stack(
+          children: [
+            Positioned.fill(child: catalog),
+            Positioned(
+              left: 10,
+              right: 10,
+              bottom: 10,
+              child: _CartBar(onTap: () => _openCartSheet(data)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _catalog(MenuResult result, String baseUrl, bool wide) {
+    final data = result.data;
     final accent = Theme.of(context).colorScheme.primary;
+    final q = _query.trim().toLowerCase();
 
     final products = data.products
         .where((p) => _categoryId == null || p.categoryId == _categoryId)
+        .where((p) => q.isEmpty || p.name.toLowerCase().contains(q))
         .toList();
+
+    OutlineInputBorder border(Color color) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: color),
+    );
 
     return Column(
       children: [
@@ -128,6 +254,45 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               ),
             ),
           ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: SizedBox(
+            height: 42,
+            child: TextField(
+              controller: _search,
+              onChanged: (v) => setState(() => _query = v),
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Cari menu',
+                hintStyle: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.muted(context),
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 20,
+                  color: AppColors.muted(context),
+                ),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          _search.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                isDense: true,
+                filled: true,
+                fillColor: AppColors.card(context),
+                contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                border: border(AppColors.line(context)),
+                enabledBorder: border(AppColors.line(context)),
+                focusedBorder: border(accent),
+              ),
+            ),
+          ),
+        ),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -159,7 +324,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                         padding: const EdgeInsets.all(32),
                         child: Center(
                           child: Text(
-                            'Belum ada menu',
+                            _query.isEmpty
+                                ? 'Belum ada menu'
+                                : 'Menu tidak ditemukan',
                             style: TextStyle(color: AppColors.muted(context)),
                           ),
                         ),
@@ -168,16 +335,27 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   )
                 : GridView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 200,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 0.82,
-                    ),
+                    // HP: sisakan ruang agar tombol "Lihat pesanan" tidak menutupi menu
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, wide ? 16 : 82),
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 200,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.82,
+                        ),
                     itemCount: products.length,
-                    itemBuilder: (_, i) =>
-                        _ProductCard(product: products[i], baseUrl: baseUrl),
+                    itemBuilder: (_, i) {
+                      final p = products[i];
+
+                      return _ProductCard(
+                        product: p,
+                        baseUrl: baseUrl,
+                        onTap: p.isAvailable
+                            ? () => _openOptions(p, data)
+                            : null,
+                      );
+                    },
                   ),
           ),
         ),
@@ -203,94 +381,194 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   }
 }
 
+/// Tombol "Lihat pesanan" di bawah katalog (hanya HP, hanya bila keranjang berisi).
+class _CartBar extends ConsumerWidget {
+  const _CartBar({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(cartProvider.select((c) => c.count));
+    if (count == 0) return const SizedBox.shrink();
+
+    final total = ref.watch(cartTotalsProvider).total;
+    final accent = Theme.of(context).colorScheme.primary;
+
+    return Material(
+      color: accent,
+      elevation: 6,
+      shadowColor: accent.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                spacing: 10,
+                children: [
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 24),
+                    height: 24,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'Lihat pesanan',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                rp(total),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.product, required this.baseUrl});
+  const _ProductCard({
+    required this.product,
+    required this.baseUrl,
+    required this.onTap,
+  });
 
   final Product product;
   final String baseUrl;
+
+  /// null = menu habis, tidak bisa diketuk.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
 
     Widget placeholder() => Container(
-          color: accent.withValues(alpha: 0.12),
-          alignment: Alignment.center,
-          child: Text(
-            initialOf(product.name),
-            style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: accent),
-          ),
-        );
+      color: accent.withValues(alpha: 0.12),
+      alignment: Alignment.center,
+      child: Text(
+        initialOf(product.name),
+        style: TextStyle(
+          fontSize: 34,
+          fontWeight: FontWeight.w800,
+          color: accent,
+        ),
+      ),
+    );
 
     final path = product.imagePath;
 
     return Opacity(
       opacity: product.isAvailable ? 1 : 0.5,
-      child: Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: AppColors.card(context),
+      child: Material(
+        color: AppColors.card(context),
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.line(context)),
+          side: BorderSide(color: AppColors.line(context)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (path != null && path.isNotEmpty)
-                    Image.network(
-                      '$baseUrl$path',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => placeholder(),
-                    )
-                  else
-                    placeholder(),
-                  if (!product.isAvailable)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.error,
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                        child: const Text(
-                          'Habis',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (path != null && path.isNotEmpty)
+                      Image.network(
+                        '$baseUrl$path',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, error, _) {
+                          debugPrint(
+                            'Gagal memuat gambar $baseUrl$path -> $error',
+                          );
+                          return placeholder();
+                        },
+                      )
+                    else
+                      placeholder(),
+                    if (!product.isAvailable)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.error,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: const Text(
+                            'Habis',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      rp(product.price),
+                      style: TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    rp(product.price),
-                    style: TextStyle(color: accent, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -243,6 +243,36 @@ class SessionController extends AsyncNotifier<SessionState> {
       // Tidak masalah: pakai salinan lama
     }
   }
+    /// Ambil pengaturan cafe terbaru (pajak, service, pembulatan, struk, warna tema),
+  /// supaya perubahan di panel web berlaku tanpa kasir harus login ulang.
+  Future<void> refreshCafe() async {
+    final s = state.value;
+    if (s == null || s.token == null || s.baseUrl == null) return;
+
+    try {
+      final json = await Api(s.baseUrl!, token: s.token).get('/me');
+      final raw = json['cafe'];
+      if (raw is! Map<String, dynamic>) return;
+
+      final cafe = Cafe.fromJson(raw);
+      await _store.saveCafe(cafe);
+
+      state = AsyncData(
+        SessionState(
+          phase: s.phase,
+          baseUrl: s.baseUrl,
+          slug: s.slug,
+          cafe: cafe,
+          user: s.user,
+          token: s.token,
+          offline: s.offline,
+          notice: s.notice,
+        ),
+      );
+    } catch (_) {
+      // Tidak masalah: pakai pengaturan yang tersimpan
+    }
+  }
 
   Future<OfflineStaff?> offlineStaff() => _store.readOfflineStaff();
 

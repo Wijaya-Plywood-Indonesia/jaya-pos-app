@@ -19,7 +19,7 @@ class LocalDb {
 
     final db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE shifts (
@@ -33,7 +33,8 @@ class LocalDb {
             closed_at INTEGER,
             closing_cash INTEGER,
             expected_cash INTEGER,
-            synced INTEGER NOT NULL DEFAULT 0
+            synced INTEGER NOT NULL DEFAULT 0,
+            sync_error TEXT
           )
         ''');
 
@@ -48,11 +49,19 @@ class LocalDb {
             method TEXT NOT NULL,
             total INTEGER NOT NULL,
             synced INTEGER NOT NULL DEFAULT 0,
-            json TEXT NOT NULL
+            json TEXT NOT NULL,
+            sync_error TEXT
           )
         ''');
 
         await db.execute('CREATE INDEX idx_orders_shift ON orders(shift_id)');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // Versi 2: catatan alasan bila server menolak sebuah data
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE shifts ADD COLUMN sync_error TEXT');
+          await db.execute('ALTER TABLE orders ADD COLUMN sync_error TEXT');
+        }
       },
     );
 

@@ -59,6 +59,7 @@ class SessionStore {
   }
 
   Future<void> saveMenu(String json) => _prefs.setString(_kMenu, json);
+  Future<void> saveCafe(Cafe cafe) => _prefs.setString(_kCafe, jsonEncode(cafe.toJson()));
 
   // ---------- Login offline ----------
 

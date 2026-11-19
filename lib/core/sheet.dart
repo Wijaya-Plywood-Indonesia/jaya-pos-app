@@ -214,13 +214,21 @@ class QuickChip extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(9),
         onTap: onTap,
+        // Tanpa `alignment` di Container: alignment membuat Container melebar
+        // penuh di dalam Wrap. Row dengan mainAxisSize.min membuat lebar chip
+        // mengikuti teks, sehingga tiga chip bisa berjajar dalam satu baris.
         child: Container(
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+              ),
+            ],
           ),
         ),
       ),

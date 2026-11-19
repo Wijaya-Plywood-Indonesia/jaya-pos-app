@@ -128,10 +128,71 @@ class ShiftRepository {
         'closed_at': DateTime.now().millisecondsSinceEpoch,
         'closing_cash': counted,
         'expected_cash': expected,
+        // Perlu dikirim ulang ke server dengan data tutup
         'synced': 0,
+        'sync_error': null,
       },
       where: 'id = ?',
       whereArgs: [shiftId],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sinkronisasi ke server
+  // ---------------------------------------------------------------------------
+
+  static String _utc(int ms) =>
+      DateTime.fromMillisecondsSinceEpoch(ms).toUtc().toIso8601String();
+
+  /// Shift yang belum terkirim (baru dibuka, atau baru ditutup), terlama dulu,
+  /// dalam bentuk yang diterima server (POST /shifts). Yang pernah ditolak server
+  /// dilewati kecuali [retryFailed].
+  Future<List<({String id, Map<String, dynamic> body})>> pendingForSync(
+    int cafeId, {
+    bool retryFailed = false,
+  }) async {
+    final rows = await _db.query(
+      'shifts',
+      where: retryFailed
+          ? 'cafe_id = ? AND synced = 0'
+          : 'cafe_id = ? AND synced = 0 AND sync_error IS NULL',
+      whereArgs: [cafeId],
+      orderBy: 'opened_at ASC',
+    );
+
+    return [
+      for (final r in rows)
+        (
+          id: r['id'] as String,
+          body: <String, dynamic>{
+            'id': r['id'],
+            'user_id': r['user_id'],
+            'outlet_id': r['outlet_id'],
+            'opened_at': _utc(r['opened_at'] as int),
+            'opening_cash': r['opening_cash'],
+            'closed_at': r['closed_at'] == null ? null : _utc(r['closed_at'] as int),
+            'closing_cash': r['closing_cash'],
+            'expected_cash': r['expected_cash'],
+          },
+        ),
+    ];
+  }
+
+  Future<void> markSynced(String id) {
+    return _db.update(
+      'shifts',
+      {'synced': 1, 'sync_error': null},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> markFailed(String id, String error) {
+    return _db.update(
+      'shifts',
+      {'sync_error': error},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 }

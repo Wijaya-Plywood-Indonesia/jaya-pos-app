@@ -87,6 +87,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
             type: cart.type,
             table: widget.table,
             customerName: cart.customerName,
+            discount: cart.discount,
             method: method,
             cashReceived: _received,
           );
@@ -122,6 +123,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
 
     final breakdown = [
       'Subtotal ${rp(totals.subtotal)}',
+      if (totals.discount > 0) 'Diskon −${rp(totals.discount)}',
       if (totals.service > 0) 'Layanan ${rp(totals.service)}',
       if (totals.tax > 0) 'Pajak ${rp(totals.tax)}',
       if (totals.rounding != 0)

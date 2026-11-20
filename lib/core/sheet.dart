@@ -160,13 +160,31 @@ class AppField extends StatelessWidget {
     this.onChanged,
     this.errorText,
     this.digitsOnly = false,
+    this.obscure = false,
+    this.maxLength,
+    this.capitalization = TextCapitalization.none,
+    this.keyboardType,
+    this.formatters,
+    this.autofocus = false,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
   final String hint;
   final ValueChanged<String>? onChanged;
   final String? errorText;
+
+  /// Kolom nominal Rupiah: hanya angka, dengan titik ribuan otomatis.
   final bool digitsOnly;
+
+  /// Untuk PIN: titik-titik, bukan angkanya.
+  final bool obscure;
+  final int? maxLength;
+  final TextCapitalization capitalization;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? formatters;
+  final bool autofocus;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -177,14 +195,20 @@ class AppField extends StatelessWidget {
 
     return TextField(
       controller: controller,
-      keyboardType: digitsOnly ? TextInputType.number : null,
-      inputFormatters: digitsOnly ? [RupiahInputFormatter()] : null,
+      keyboardType: keyboardType ?? (digitsOnly ? TextInputType.number : null),
+      inputFormatters: formatters ?? (digitsOnly ? [RupiahInputFormatter()] : null),
+      obscureText: obscure,
+      maxLength: maxLength,
+      textCapitalization: capitalization,
+      autofocus: autofocus,
       onChanged: onChanged,
+      onSubmitted: onSubmitted,
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(fontSize: 14, color: AppColors.muted(context)),
         errorText: errorText,
+        counterText: '',
         errorStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         isDense: true,
         filled: true,

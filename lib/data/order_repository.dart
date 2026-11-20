@@ -32,11 +32,17 @@ class OrderRepository {
     required String method,
     DiningTableInfo? table,
     String? customerName,
+    AppliedDiscount? discount,
     int cashReceived = 0,
   }) async {
     if (lines.isEmpty) throw StateError('Pesanan kosong');
 
-    final totals = OrderTotals.forCart(lines, cafe);
+    // Diskon yang syaratnya belum terpenuhi (potongan 0) tidak dicatat
+    final subtotal = lines.fold<int>(0, (s, l) => s + l.lineTotal);
+    final discountAmount = discount?.amountFor(subtotal).amount ?? 0;
+    final applied = discountAmount > 0 ? discount : null;
+
+    final totals = OrderTotals.forCart(lines, cafe, discount: discountAmount);
     final isCash = method == 'cash';
 
     if (isCash && cashReceived < totals.total) {
@@ -79,6 +85,9 @@ class OrderRepository {
         cashReceived: isCash ? cashReceived : 0,
         change: isCash ? cashReceived - totals.total : 0,
         orderedAt: now,
+        discountId: applied?.discountId,
+        discountName: applied?.label,
+        approvedBy: applied?.approvedBy,
       );
 
       await txn.insert('orders', {

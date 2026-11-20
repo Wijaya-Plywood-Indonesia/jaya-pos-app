@@ -113,6 +113,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           child: CartPanel(
             tables: data.tables,
+            discounts: data.discounts,
             onClose: () => Navigator.pop(ctx),
             onPay: () {
               Navigator.pop(ctx);
@@ -196,6 +197,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 width: 310,
                 child: CartPanel(
                   tables: data.tables,
+                  discounts: data.discounts,
                   onPay: () => _pay(data),
                 ),
               ),

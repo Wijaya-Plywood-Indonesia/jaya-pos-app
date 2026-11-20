@@ -46,6 +46,7 @@ class BillsController extends AsyncNotifier<List<SavedBill>> {
       tableId: dineIn ? table?.id : null,
       tableName: dineIn ? table?.name : null,
       customerName: name.isNotEmpty ? name : null,
+      discount: cart.discount,
     );
 
     await ref.read(billRepoProvider).insert(bill);

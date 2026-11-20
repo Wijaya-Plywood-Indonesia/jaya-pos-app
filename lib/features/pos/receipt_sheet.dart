@@ -128,7 +128,7 @@ class ReceiptBody extends StatelessWidget {
         for (final l in order.items) _ItemRow(line: l),
         const DashedDivider(),
         _Rw('Subtotal', rp(t.subtotal)),
-        if (t.discount > 0) _Rw('Diskon', '− ${rp(t.discount)}', color: green),
+        if (t.discount > 0) _Rw(order.discountName ?? 'Diskon', '− ${rp(t.discount)}', color: green),
         if (t.service > 0) _Rw('Layanan ${fmtPercent(order.servicePercent)}%', rp(t.service)),
         if (t.tax > 0) _Rw('Pajak ${fmtPercent(order.taxPercent)}%', rp(t.tax)),
         if (t.rounding != 0)

@@ -210,24 +210,73 @@ class DiningTableInfo {
       );
 }
 
+/// Promo atau voucher dari server. Voucher = punya [code]; promo biasa tanpa kode.
+class DiscountInfo {
+  const DiscountInfo({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.value,
+    this.code,
+    this.minPurchase = 0,
+    this.maxDiscount,
+    this.startsAt,
+    this.endsAt,
+  });
+
+  final int id;
+  final String name;
+  final String? code;
+
+  /// percent atau amount
+  final String type;
+  final int value;
+  final int minPurchase;
+  final int? maxDiscount;
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+
+  bool get isVoucher => code != null && code!.isNotEmpty;
+
+  /// Masih berlaku pada waktu [t]? Dicek lagi di tablet karena menu bisa berasal dari
+  /// salinan lama saat offline.
+  bool activeAt(DateTime t) =>
+      (startsAt == null || !t.isBefore(startsAt!)) && (endsAt == null || !t.isAfter(endsAt!));
+
+  factory DiscountInfo.fromJson(Map<String, dynamic> j) => DiscountInfo(
+        id: (j['id'] as num).toInt(),
+        name: j['name'] as String,
+        code: j['code'] as String?,
+        type: j['type'] as String,
+        value: (j['value'] as num).toInt(),
+        minPurchase: (j['min_purchase'] as num?)?.toInt() ?? 0,
+        maxDiscount: (j['max_discount'] as num?)?.toInt(),
+        startsAt: DateTime.tryParse((j['starts_at'] as String?) ?? '')?.toLocal(),
+        endsAt: DateTime.tryParse((j['ends_at'] as String?) ?? '')?.toLocal(),
+      );
+}
+
 class MenuData {
   const MenuData({
     required this.categories,
     required this.optionGroups,
     required this.products,
     required this.tables,
+    this.discounts = const [],
   });
 
   final List<MenuCategory> categories;
   final List<OptionGroup> optionGroups;
   final List<Product> products;
   final List<DiningTableInfo> tables;
+  final List<DiscountInfo> discounts;
 
   factory MenuData.fromJson(Map<String, dynamic> j) => MenuData(
         categories: _list(j['categories'], MenuCategory.fromJson),
         optionGroups: _list(j['option_groups'], OptionGroup.fromJson),
         products: _list(j['products'], Product.fromJson),
         tables: _list(j['tables'], DiningTableInfo.fromJson),
+        discounts: _list(j['discounts'], DiscountInfo.fromJson),
       );
 }
 

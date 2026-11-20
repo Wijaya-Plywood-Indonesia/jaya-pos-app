@@ -17,6 +17,7 @@ class SavedBill {
     this.tableId,
     this.tableName,
     this.customerName,
+    this.discount,
   });
 
   final String id;
@@ -27,6 +28,7 @@ class SavedBill {
   final int? tableId;
   final String? tableName;
   final String? customerName;
+  final AppliedDiscount? discount;
 
   int get itemCount => lines.fold(0, (s, l) => s + l.qty);
 
@@ -42,6 +44,7 @@ class SavedBill {
         'table_id': tableId,
         'table_name': tableName,
         'customer_name': customerName,
+        'discount': discount?.toJson(),
         'lines': lines.map((l) => l.toJson()).toList(),
       };
 
@@ -53,6 +56,9 @@ class SavedBill {
         tableId: (j['table_id'] as num?)?.toInt(),
         tableName: j['table_name'] as String?,
         customerName: j['customer_name'] as String?,
+        discount: j['discount'] == null
+            ? null
+            : AppliedDiscount.fromJson(j['discount'] as Map<String, dynamic>),
         lines: ((j['lines'] as List?) ?? const [])
             .map((e) => CartLine.fromJson(e as Map<String, dynamic>))
             .toList(),

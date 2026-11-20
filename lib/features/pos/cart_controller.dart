@@ -10,12 +10,14 @@ class CartState {
     this.type = OrderType.dineIn,
     this.tableId,
     this.customerName = '',
+    this.discount,
   });
 
   final List<CartLine> lines;
   final OrderType type;
   final int? tableId;
   final String customerName;
+  final AppliedDiscount? discount;
 
   bool get isEmpty => lines.isEmpty;
 
@@ -28,17 +30,28 @@ class CartState {
     int? tableId,
     bool clearTable = false,
     String? customerName,
+    AppliedDiscount? discount,
+    bool clearDiscount = false,
   }) {
     return CartState(
       lines: lines ?? this.lines,
       type: type ?? this.type,
       tableId: clearTable ? null : (tableId ?? this.tableId),
       customerName: customerName ?? this.customerName,
+      discount: clearDiscount ? null : (discount ?? this.discount),
     );
   }
 }
 
 final cartProvider = NotifierProvider<CartController, CartState>(CartController.new);
+
+/// Potongan diskon saat ini. [bad] terisi bila syarat minimal belanjanya belum terpenuhi.
+final cartDiscountProvider = Provider<({int amount, String? bad})>((ref) {
+  final cart = ref.watch(cartProvider);
+  final subtotal = cart.lines.fold<int>(0, (s, l) => s + l.lineTotal);
+
+  return cart.discount?.amountFor(subtotal) ?? (amount: 0, bad: null);
+});
 
 /// Rincian tagihan pesanan aktif, dihitung dari pengaturan pajak, service,
 /// dan pembulatan cafe.
@@ -46,7 +59,9 @@ final cartTotalsProvider = Provider<OrderTotals>((ref) {
   final cart = ref.watch(cartProvider);
   final cafe = ref.watch(sessionProvider.select((s) => s.value?.cafe));
 
-  return OrderTotals.forCart(cart.lines, cafe);
+  final discount = ref.watch(cartDiscountProvider);
+
+  return OrderTotals.forCart(cart.lines, cafe, discount: discount.amount);
 });
 
 class CartController extends Notifier<CartState> {
@@ -92,6 +107,10 @@ class CartController extends Notifier<CartState> {
     state = id == null ? state.copyWith(clearTable: true) : state.copyWith(tableId: id);
   }
 
+  void setDiscount(AppliedDiscount? discount) {
+    state = discount == null ? state.copyWith(clearDiscount: true) : state.copyWith(discount: discount);
+  }
+
   void setName(String name) => state = state.copyWith(customerName: name);
 
   /// Buka bill tersimpan: barisnya digabung ke pesanan aktif (menu yang sama
@@ -114,6 +133,8 @@ class CartController extends Notifier<CartState> {
       type: bill.type,
       tableId: bill.tableId,
       customerName: bill.customerName ?? '',
+      // Seperti di mockup: bill tanpa diskon tidak menghapus diskon yang sedang dipakai
+      discount: bill.discount ?? state.discount,
     );
   }
 

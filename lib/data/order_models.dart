@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../core/format.dart';
 import 'models.dart';
 
 /// Metode bayar yang disimpan di database: cash, qris, card.
@@ -57,6 +58,85 @@ class SelectedOption {
         'option_name': name,
         'extra_price': extraPrice,
       };
+}
+
+/// Diskon yang sedang dipakai di pesanan. Satu pesanan satu diskon.
+class AppliedDiscount {
+  const AppliedDiscount({
+    required this.label,
+    required this.type,
+    required this.value,
+    this.discountId,
+    this.minPurchase = 0,
+    this.maxDiscount,
+    this.approvedBy,
+  });
+
+  /// null = diskon manual (bukan dari daftar promo di server)
+  final int? discountId;
+  final String label;
+
+  /// percent atau amount
+  final String type;
+  final int value;
+  final int minPurchase;
+  final int? maxDiscount;
+
+  /// ID owner atau manajer yang menyetujui (diskon manual)
+  final int? approvedBy;
+
+  factory AppliedDiscount.fromInfo(DiscountInfo d) => AppliedDiscount(
+        discountId: d.id,
+        label: d.isVoucher ? 'Voucher ${d.code}' : d.name,
+        type: d.type,
+        value: d.value,
+        minPurchase: d.minPurchase,
+        maxDiscount: d.maxDiscount,
+      );
+
+  factory AppliedDiscount.manual({
+    required String type,
+    required int value,
+    required int approvedBy,
+  }) =>
+      AppliedDiscount(
+        label: 'Diskon manual ${type == 'percent' ? '$value%' : rp(value)}',
+        type: type,
+        value: value,
+        approvedBy: approvedBy,
+      );
+
+  /// Potongan untuk [subtotal]. [bad] terisi bila syarat minimal belanja belum terpenuhi.
+  ({int amount, String? bad}) amountFor(int subtotal) {
+    if (minPurchase > 0 && subtotal < minPurchase) {
+      return (amount: 0, bad: 'Minimal belanja ${rp(minPurchase)}');
+    }
+
+    var a = type == 'percent' ? (subtotal * value / 100).round() : value;
+    if (maxDiscount != null) a = math.min(a, maxDiscount!);
+
+    return (amount: math.min(a, subtotal), bad: null);
+  }
+
+  Map<String, dynamic> toJson() => {
+        'discount_id': discountId,
+        'label': label,
+        'type': type,
+        'value': value,
+        'min_purchase': minPurchase,
+        'max_discount': maxDiscount,
+        'approved_by': approvedBy,
+      };
+
+  factory AppliedDiscount.fromJson(Map<String, dynamic> j) => AppliedDiscount(
+        discountId: (j['discount_id'] as num?)?.toInt(),
+        label: j['label'] as String,
+        type: j['type'] as String,
+        value: (j['value'] as num).toInt(),
+        minPurchase: (j['min_purchase'] as num?)?.toInt() ?? 0,
+        maxDiscount: (j['max_discount'] as num?)?.toInt(),
+        approvedBy: (j['approved_by'] as num?)?.toInt(),
+      );
 }
 
 /// Satu baris di keranjang. Nama dan harga disalin saat ditambahkan,
@@ -221,6 +301,9 @@ class PaidOrder {
     this.status = 'paid',
     this.synced = false,
     this.kitchenStatus = 'new',
+    this.discountId,
+    this.discountName,
+    this.approvedBy,
   });
 
   final String id;
@@ -254,6 +337,11 @@ class PaidOrder {
   /// Status antrian: new (baru), ready (siap diambil), served (sudah diserahkan).
   final String kitchenStatus;
 
+  /// Diskon yang dipakai (kosong = tanpa diskon). [approvedBy] = owner/manajer penyetuju.
+  final int? discountId;
+  final String? discountName;
+  final int? approvedBy;
+
   String get where => orderWhere(type, tableName: tableName, customerName: customerName);
 
   String get methodLabel => paymentLabels[method] ?? method;
@@ -276,6 +364,9 @@ class PaidOrder {
             : customerName!.trim(),
         'status': status,
         'kitchen_status': kitchenStatus,
+        'discount_id': discountId,
+        'discount_name': discountName,
+        'approved_by': approvedBy,
         'items': items.map((l) => l.toJson()).toList(),
         'subtotal': totals.subtotal,
         'discount_total': totals.discount,
@@ -337,6 +428,9 @@ class PaidOrder {
       status: status ?? (j['status'] as String?) ?? 'paid',
       synced: synced,
       kitchenStatus: kitchenStatus ?? (j['kitchen_status'] as String?) ?? 'new',
+      discountId: (j['discount_id'] as num?)?.toInt(),
+      discountName: j['discount_name'] as String?,
+      approvedBy: (j['approved_by'] as num?)?.toInt(),
     );
   }
 }

@@ -10,6 +10,7 @@ import '../session/session_controller.dart';
 import 'bills_controller.dart';
 import 'bills_sheet.dart';
 import 'cart_controller.dart';
+import 'discount_sheet.dart';
 import 'pos_widgets.dart';
 
 /// Panel "Pesanan aktif". Di tablet menempel di kanan katalog,
@@ -19,10 +20,14 @@ class CartPanel extends ConsumerWidget {
     super.key,
     required this.tables,
     required this.onPay,
+    this.discounts = const [],
     this.onClose,
   });
 
   final List<DiningTableInfo> tables;
+
+  /// Promo dan voucher dari server, untuk lembar diskon.
+  final List<DiscountInfo> discounts;
   final VoidCallback onPay;
 
   /// Hanya diisi di HP (tombol turun di pojok kiri atas).
@@ -50,6 +55,7 @@ class CartPanel extends ConsumerWidget {
     final cart = ref.watch(cartProvider);
     final totals = ref.watch(cartTotalsProvider);
     final cafe = ref.watch(sessionProvider.select((s) => s.value?.cafe));
+    final discountInfo = ref.watch(cartDiscountProvider);
     final accent = Theme.of(context).colorScheme.primary;
     final line = softLine(context);
 
@@ -161,9 +167,20 @@ class CartPanel extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _DiscountButton(
+                      discounts: discounts,
+                      enabled: !cart.isEmpty,
+                      amount: totals.discount,
+                      bad: discountInfo.bad,
+                    ),
+                    const SizedBox(height: 10),
                     _SumRow('Subtotal', rp(totals.subtotal)),
                     if (totals.discount > 0)
-                      _SumRow('Diskon', '− ${rp(totals.discount)}', color: const Color(0xFF15803D)),
+                      _SumRow(
+                        cart.discount?.label ?? 'Diskon',
+                        '− ${rp(totals.discount)}',
+                        color: const Color(0xFF15803D),
+                      ),
                     if (totals.service > 0 && cafe != null)
                       _SumRow('Layanan ${fmtPercent(cafe.servicePercent)}%', rp(totals.service)),
                     if (totals.tax > 0 && cafe != null)
@@ -518,6 +535,127 @@ class _BillsButton extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Tombol "Tambah diskon atau promo". Setelah dipasang berubah jadi kotak hijau
+/// berisi nama diskon, dengan tombol silang untuk melepasnya.
+class _DiscountButton extends ConsumerWidget {
+  const _DiscountButton({
+    required this.discounts,
+    required this.enabled,
+    required this.amount,
+    required this.bad,
+  });
+
+  final List<DiscountInfo> discounts;
+  final bool enabled;
+  final int amount;
+
+  /// Pesan bila syarat diskon belum terpenuhi (misalnya minimal belanja).
+  final String? bad;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final applied = ref.watch(cartProvider.select((c) => c.discount));
+    final dark = isDarkMode(context);
+
+    Future<void> open() async {
+      final done = await showDiscountSheet(context, discounts: discounts);
+      if (done == true && context.mounted) showToast(context, 'Diskon diterapkan');
+    }
+
+    if (applied == null) {
+      return Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: Material(
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(color: AppColors.line(context), width: 1.5),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: enabled ? open : null,
+            child: Container(
+              height: 38,
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 6,
+                children: [
+                  Icon(Icons.sell_outlined, size: 16, color: AppColors.muted(context)),
+                  Text(
+                    'Tambah diskon atau promo',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.muted(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final green = dark ? const Color(0xFF86EFAC) : const Color(0xFF15803D);
+    final amber = dark ? const Color(0xFFFCD34D) : const Color(0xFFB45309);
+
+    return Material(
+      color: dark ? const Color(0xFF12301F) : const Color(0xFFF0FDF4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(
+          color: dark ? const Color(0xFF14532D) : const Color(0xFFBBF7D0),
+          width: 1.5,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: open,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+          child: Row(
+            spacing: 6,
+            children: [
+              Icon(Icons.sell, size: 16, color: green),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      applied.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: green),
+                    ),
+                    if (bad != null)
+                      Text(
+                        bad!,
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: amber),
+                      ),
+                  ],
+                ),
+              ),
+              if (amount > 0)
+                Text(
+                  '− ${rp(amount)}',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: green),
+                ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Hapus diskon',
+                icon: Icon(Icons.close, size: 18, color: green),
+                onPressed: () => ref.read(cartProvider.notifier).setDiscount(null),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -32,7 +32,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
   String? _saveError;
   bool _busy = false;
 
-  int get _received => int.tryParse(_cash.text) ?? 0;
+  int get _received => parseRupiah(_cash.text);
 
   @override
   void dispose() {
@@ -45,7 +45,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
 
   void _setCash(int v) {
     setState(() {
-      _cash.text = '$v';
+      _cash.text = groupDigits(v);
       _cashError = null;
     });
   }
@@ -141,7 +141,11 @@ class _PaySheetState extends ConsumerState<PaySheet> {
               const SizedBox(height: 2),
               Text(
                 rp(totals.total),
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: accent),
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.accentText(context),
+                ),
               ),
               const SizedBox(height: 4),
               SubText('$where · ${cart.count} item'),
@@ -276,7 +280,8 @@ class _MethodButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
-    final fg = selected ? accent : AppColors.muted(context);
+    final text = AppColors.accentText(context);
+    final fg = selected ? text : AppColors.muted(context);
 
     return Opacity(
       opacity: onTap == null ? 0.45 : 1,
@@ -284,7 +289,7 @@ class _MethodButton extends StatelessWidget {
         color: selected ? accent.withValues(alpha: 0.08) : AppColors.card(context),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: selected ? accent : AppColors.line(context), width: 2),
+          side: BorderSide(color: selected ? text : AppColors.line(context), width: 2),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

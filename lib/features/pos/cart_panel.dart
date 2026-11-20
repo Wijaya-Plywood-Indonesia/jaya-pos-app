@@ -96,7 +96,7 @@ class CartPanel extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: accent,
+                          color: AppColors.accentText(context),
                         ),
                       ),
                     ],
@@ -186,7 +186,7 @@ class CartPanel extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
-                            color: accent,
+                            color: AppColors.accentText(context),
                           ),
                         ),
                       ],
@@ -196,6 +196,7 @@ class CartPanel extends ConsumerWidget {
                       spacing: 8,
                       children: [
                         Expanded(
+                          flex: 2,
                           child: TintButton(
                             label: 'Simpan bill',
                             onPressed: cart.isEmpty
@@ -204,7 +205,7 @@ class CartPanel extends ConsumerWidget {
                           ),
                         ),
                         Expanded(
-                          flex: 2,
+                          flex: 3,
                           child: FilledButton(
                             onPressed: cart.isEmpty ? null : onPay,
                             child: Text(
@@ -286,7 +287,11 @@ class _LineRow extends ConsumerWidget {
                   padding: const EdgeInsets.only(top: 3),
                   child: Text(
                     rp(line.lineTotal),
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: accent),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accentText(context),
+                    ),
                   ),
                 ),
               ],
@@ -337,9 +342,12 @@ class _CartControlsState extends ConsumerState<_CartControls> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
+      child: Column(
         spacing: 8,
         children: [
+          Row(
+            spacing: 8,
+            children: [
           Expanded(
             child: _Toggle(
               label: OrderType.dineIn.label,
@@ -391,10 +399,9 @@ class _CartControlsState extends ConsumerState<_CartControls> {
                 ),
               ),
             ),
-          if (!dineIn)
-            Expanded(
-              flex: 2,
-              child: SizedBox(
+            ],
+          ),
+          SizedBox(
                 height: 38,
                 child: TextField(
                   controller: _name,
@@ -402,7 +409,7 @@ class _CartControlsState extends ConsumerState<_CartControls> {
                   textCapitalization: TextCapitalization.words,
                   style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: 'Atas nama',
+                    hintText: 'Atas nama (opsional)',
                     hintStyle: TextStyle(fontSize: 13, color: AppColors.muted(context)),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
@@ -416,12 +423,11 @@ class _CartControlsState extends ConsumerState<_CartControls> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                      borderSide: BorderSide(color: AppColors.accentText(context)),
                     ),
                   ),
                 ),
               ),
-            ),
         ],
       ),
     );

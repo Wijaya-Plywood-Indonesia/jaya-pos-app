@@ -74,9 +74,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   // Aksi kasir
   // ---------------------------------------------------------------------------
   Future<void> _openOptions(Product p, MenuData data) async {
-    final groups = data.optionGroups
-        .where((g) => p.optionGroupIds.contains(g.id))
-        .toList();
+    final groups = data.optionGroups.where((g) => p.optionGroupIds.contains(g.id)).toList();
 
     final line = await showOptionSheet(context, product: p, groups: groups);
 
@@ -95,10 +93,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
     final table = data.tables.where((t) => t.id == cart.tableId).firstOrNull;
 
-    final order = await showAppSheet<PaidOrder>(
-      context,
-      (_) => PaySheet(table: table),
-    );
+    final order = await showAppSheet<PaidOrder>(context, (_) => PaySheet(table: table));
     if (order == null || !mounted) return;
 
     ref.read(cartProvider.notifier).clear();
@@ -174,10 +169,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              api?.message ?? 'Gagal memuat menu.',
-              textAlign: TextAlign.center,
-            ),
+            Text(api?.message ?? 'Gagal memuat menu.', textAlign: TextAlign.center),
             const SizedBox(height: 12),
             OutlinedButton(onPressed: _reload, child: const Text('Coba lagi')),
           ],
@@ -202,7 +194,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               Expanded(child: catalog),
               SizedBox(
                 width: 310,
-                child: CartPanel(tables: data.tables, onPay: () => _pay(data)),
+                child: CartPanel(
+                  tables: data.tables,
+                  onPay: () => _pay(data),
+                ),
               ),
             ],
           );
@@ -234,9 +229,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         .toList();
 
     OutlineInputBorder border(Color color) => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: color),
-    );
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: color),
+        );
 
     return Column(
       children: [
@@ -264,15 +259,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               style: const TextStyle(fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Cari menu',
-                hintStyle: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.muted(context),
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  size: 20,
-                  color: AppColors.muted(context),
-                ),
+                hintStyle: TextStyle(fontSize: 14, color: AppColors.muted(context)),
+                prefixIcon: Icon(Icons.search, size: 20, color: AppColors.muted(context)),
                 suffixIcon: _query.isEmpty
                     ? null
                     : IconButton(
@@ -324,9 +312,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                         padding: const EdgeInsets.all(32),
                         child: Center(
                           child: Text(
-                            _query.isEmpty
-                                ? 'Belum ada menu'
-                                : 'Menu tidak ditemukan',
+                            _query.isEmpty ? 'Belum ada menu' : 'Menu tidak ditemukan',
                             style: TextStyle(color: AppColors.muted(context)),
                           ),
                         ),
@@ -337,13 +323,12 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     // HP: sisakan ruang agar tombol "Lihat pesanan" tidak menutupi menu
                     padding: EdgeInsets.fromLTRB(16, 16, 16, wide ? 16 : 82),
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 200,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 0.82,
-                        ),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 200,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.82,
+                    ),
                     itemCount: products.length,
                     itemBuilder: (_, i) {
                       final p = products[i];
@@ -351,9 +336,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       return _ProductCard(
                         product: p,
                         baseUrl: baseUrl,
-                        onTap: p.isAvailable
-                            ? () => _openOptions(p, data)
-                            : null,
+                        onTap: p.isAvailable ? () => _openOptions(p, data) : null,
                       );
                     },
                   ),
@@ -474,17 +457,17 @@ class _ProductCard extends StatelessWidget {
     final accent = Theme.of(context).colorScheme.primary;
 
     Widget placeholder() => Container(
-      color: accent.withValues(alpha: 0.12),
-      alignment: Alignment.center,
-      child: Text(
-        initialOf(product.name),
-        style: TextStyle(
-          fontSize: 34,
-          fontWeight: FontWeight.w800,
-          color: accent,
-        ),
-      ),
-    );
+          color: accent.withValues(alpha: 0.12),
+          alignment: Alignment.center,
+          child: Text(
+            initialOf(product.name),
+            style: TextStyle(
+              fontSize: 34,
+              fontWeight: FontWeight.w800,
+              color: AppColors.accentText(context),
+            ),
+          ),
+        );
 
     final path = product.imagePath;
 
@@ -510,12 +493,7 @@ class _ProductCard extends StatelessWidget {
                       Image.network(
                         '$baseUrl$path',
                         fit: BoxFit.cover,
-                        errorBuilder: (_, error, _) {
-                          debugPrint(
-                            'Gagal memuat gambar $baseUrl$path -> $error',
-                          );
-                          return placeholder();
-                        },
+                        errorBuilder: (_, _, _) => placeholder(),
                       )
                     else
                       placeholder(),
@@ -524,10 +502,7 @@ class _ProductCard extends StatelessWidget {
                         top: 8,
                         right: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: Theme.of(context).colorScheme.error,
                             borderRadius: BorderRadius.circular(99),
@@ -560,7 +535,7 @@ class _ProductCard extends StatelessWidget {
                     Text(
                       rp(product.price),
                       style: TextStyle(
-                        color: accent,
+                        color: AppColors.accentText(context),
                         fontWeight: FontWeight.w700,
                       ),
                     ),

@@ -70,7 +70,7 @@ class OrderRepository {
         type: type,
         tableId: type == OrderType.dineIn ? table?.id : null,
         tableName: type == OrderType.dineIn ? table?.name : null,
-        customerName: type == OrderType.takeAway ? customerName : null,
+        customerName: (customerName?.trim().isEmpty ?? true) ? null : customerName!.trim(),
         items: lines,
         totals: totals,
         taxPercent: cafe.taxPercent,

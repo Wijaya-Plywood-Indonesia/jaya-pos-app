@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'format.dart';
 import 'theme.dart';
 
 bool _isDark(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
@@ -177,7 +178,7 @@ class AppField extends StatelessWidget {
     return TextField(
       controller: controller,
       keyboardType: digitsOnly ? TextInputType.number : null,
-      inputFormatters: digitsOnly ? [FilteringTextInputFormatter.digitsOnly] : null,
+      inputFormatters: digitsOnly ? [RupiahInputFormatter()] : null,
       onChanged: onChanged,
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
@@ -191,7 +192,7 @@ class AppField extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         border: border(AppColors.line(context)),
         enabledBorder: border(AppColors.line(context)),
-        focusedBorder: border(Theme.of(context).colorScheme.primary),
+        focusedBorder: border(AppColors.accentText(context)),
         errorBorder: border(const Color(0xFFDC2626)),
         focusedErrorBorder: border(const Color(0xFFDC2626)),
       ),

@@ -178,6 +178,8 @@ class _QueueCard extends ConsumerWidget {
     final dark = isDarkMode(context);
     final mins = DateTime.now().difference(order.orderedAt).inMinutes.clamp(0, 99999);
     final isNew = order.kitchenStatus == 'new';
+    final name = order.customerName?.trim() ?? '';
+    final place = orderWhere(order.type, tableName: order.tableName);
 
     // Lebih dari 8 menit dan belum siap: tandai terlambat
     final isLate = mins >= 8 && isNew;
@@ -218,7 +220,10 @@ class _QueueCard extends ConsumerWidget {
               ),
             ],
           ),
-          Align(alignment: Alignment.centerLeft, child: Pill(order.where)),
+          // Nama dipanggil saat pesanan siap, jadi dibuat paling menonjol
+          if (name.isNotEmpty)
+            Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          Align(alignment: Alignment.centerLeft, child: Pill(place)),
           for (final l in order.items)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,

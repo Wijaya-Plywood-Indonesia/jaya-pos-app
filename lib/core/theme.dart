@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 class AppColors {
@@ -18,6 +20,35 @@ class AppColors {
   static Color card(BuildContext c) => _dark(c) ? _cardDark : Colors.white;
   static Color line(BuildContext c) => _dark(c) ? _lineDark : _lineLight;
   static Color muted(BuildContext c) => _dark(c) ? _mutedDark : _mutedLight;
+
+  /// Warna aksen untuk TEKS, ikon, dan garis (bukan latar tombol).
+  /// Di mode terang sama dengan aksen cafe. Di mode gelap dicerahkan seperlunya,
+  /// supaya aksen yang gelap (misalnya biru tua) tetap terbaca di atas kartu gelap.
+  static Color accentText(BuildContext c) {
+    final accent = Theme.of(c).colorScheme.primary;
+
+    return _dark(c) ? readableOn(accent, _cardDark) : accent;
+  }
+
+  /// Mencerahkan [color] sampai kontrasnya terhadap [background] minimal 4.5:1.
+  static Color readableOn(Color color, Color background) {
+    double contrast(Color a, Color b) {
+      final la = a.computeLuminance();
+      final lb = b.computeLuminance();
+
+      return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+    }
+
+    var hsl = HSLColor.fromColor(color);
+    var result = color;
+
+    while (contrast(result, background) < 4.5 && hsl.lightness < 0.9) {
+      hsl = hsl.withLightness(math.min(0.9, hsl.lightness + 0.04));
+      result = hsl.toColor();
+    }
+
+    return result;
+  }
 
   /// Mengubah teks warna seperti "#d7263d" menjadi Color, dengan cadangan bila tidak valid.
   static Color parse(String? hex, {Color fallback = red}) {

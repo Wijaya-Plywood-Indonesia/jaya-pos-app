@@ -247,7 +247,13 @@ class _Nav extends StatelessWidget {
           children: [
             SizedBox(
               height: 44,
-              child: Center(child: Icon(Icons.local_cafe_outlined, color: primary, size: 26)),
+              child: Center(
+                child: Icon(
+                  Icons.local_cafe_outlined,
+                  color: AppColors.readableOn(primary, _navBg),
+                  size: 26,
+                ),
+              ),
             ),
             const SizedBox(height: 6),
             ...items,

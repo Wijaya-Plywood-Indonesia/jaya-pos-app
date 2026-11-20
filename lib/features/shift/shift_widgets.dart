@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 
 import '../../core/format.dart';
 import '../../core/sheet.dart';
+import '../../core/theme_mode.dart';
 import '../../core/widgets.dart';
 import '../../data/shift_repository.dart';
+import '../pos/pos_widgets.dart';
 import '../session/logout_flow.dart';
 import '../session/session_controller.dart';
 import 'shift_controller.dart';
@@ -28,7 +30,7 @@ class _ShiftOpenCardState extends ConsumerState<ShiftOpenCard> {
   String? _error;
   bool _busy = false;
 
-  int get _value => int.tryParse(_cash.text) ?? 0;
+  int get _value => parseRupiah(_cash.text);
 
   @override
   void dispose() {
@@ -56,7 +58,7 @@ class _ShiftOpenCardState extends ConsumerState<ShiftOpenCard> {
 
   void _quick(int v) {
     setState(() {
-      _cash.text = '$v';
+      _cash.text = groupDigits(v);
       _error = null;
     });
   }
@@ -173,6 +175,7 @@ class _AccountSheet extends ConsumerWidget {
             ],
           ),
           _ShiftInfoCard(shift: shift),
+          const _ThemePicker(),
           DarkButton(
             label: 'Tutup shift',
             onPressed: shift == null
@@ -186,6 +189,41 @@ class _AccountSheet extends ConsumerWidget {
           SoftButton(label: 'Tutup', onPressed: () => Navigator.pop(context)),
         ],
       ),
+    );
+  }
+}
+
+/// Pilihan tema: otomatis (mengikuti HP), terang, atau gelap.
+class _ThemePicker extends ConsumerWidget {
+  const _ThemePicker();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(themeModeProvider);
+
+    Widget option(String label, ThemeMode mode) {
+      return Expanded(
+        child: PickButton(
+          label: label,
+          selected: current == mode,
+          onTap: () => ref.read(themeModeProvider.notifier).set(mode),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const FieldLabel('Tema'),
+        Row(
+          spacing: 7,
+          children: [
+            option('Otomatis', ThemeMode.system),
+            option('Terang', ThemeMode.light),
+            option('Gelap', ThemeMode.dark),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -290,7 +328,7 @@ class _CloseShiftSheetState extends State<_CloseShiftSheet> {
   final _counted = TextEditingController();
   String? _error;
 
-  int get _value => int.tryParse(_counted.text) ?? 0;
+  int get _value => parseRupiah(_counted.text);
   int get _expected => widget.shift.openingCash + widget.summary.cashSales;
 
   @override

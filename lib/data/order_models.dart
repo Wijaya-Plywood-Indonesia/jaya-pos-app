@@ -22,14 +22,16 @@ enum OrderType {
       OrderType.values.firstWhere((t) => t.api == v, orElse: () => OrderType.dineIn);
 }
 
-/// "Dine In · Meja 03" atau "Take Away · Budi"
+/// "Dine In · Meja 3 · Faris", "Dine In · Faris", atau "Take Away · Faris".
+/// Nama pelanggan opsional dan boleh diisi untuk jenis pesanan apa pun.
 String orderWhere(OrderType type, {String? tableName, String? customerName}) {
-  if (type == OrderType.dineIn) {
-    return (tableName == null || tableName.isEmpty) ? 'Dine In' : 'Dine In · $tableName';
-  }
-
   final name = customerName?.trim() ?? '';
-  return name.isEmpty ? 'Take Away' : 'Take Away · $name';
+
+  return [
+    type.label,
+    if (type == OrderType.dineIn && tableName != null && tableName.isNotEmpty) tableName,
+    if (name.isNotEmpty) name,
+  ].join(' · ');
 }
 
 /// Satu pilihan opsi yang dipilih kasir (misalnya "Large" atau "Less Sugar").

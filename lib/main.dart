@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme.dart';
+import 'core/theme_mode.dart';
 import 'data/local_db.dart';
 import 'data/session_store.dart';
 import 'features/auth/activation_screen.dart';
@@ -21,6 +22,7 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [
+        prefsProvider.overrideWithValue(prefs),
         storeProvider.overrideWithValue(store),
         localDbProvider.overrideWithValue(db),
       ],
@@ -41,7 +43,7 @@ class JayaApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Jaya POS',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(themeModeProvider),
       theme: AppColors.theme(Brightness.light, accent),
       darkTheme: AppColors.theme(Brightness.dark, accent),
       home: const Gate(),

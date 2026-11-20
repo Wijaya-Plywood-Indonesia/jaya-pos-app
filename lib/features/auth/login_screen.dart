@@ -363,7 +363,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // ---------- Tahap 2: masukkan PIN ----------
   Widget _pinStage() {
     final staff = _selected!;
-    final accent = Theme.of(context).colorScheme.primary;
+    final accent = AppColors.accentText(context);
     final locked = _lockSecs > 0;
     final message = locked
         ? 'Terlalu banyak percobaan. Coba lagi dalam $_lockSecs detik.'

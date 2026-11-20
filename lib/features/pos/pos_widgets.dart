@@ -211,14 +211,16 @@ class TintButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
+    // Teks dan garis memakai aksen yang sudah dicerahkan di mode gelap
+    final fg = AppColors.accentText(context);
 
     return FilledButton(
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         backgroundColor: accent.withValues(alpha: 0.08),
-        foregroundColor: accent,
+        foregroundColor: fg,
         elevation: 0,
-        side: BorderSide(color: accent.withValues(alpha: 0.3)),
+        side: BorderSide(color: fg.withValues(alpha: 0.3)),
       ),
       child: Text(label),
     );
@@ -342,7 +344,7 @@ class NoteField extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         border: border(AppColors.line(context)),
         enabledBorder: border(AppColors.line(context)),
-        focusedBorder: border(Theme.of(context).colorScheme.primary),
+        focusedBorder: border(AppColors.accentText(context)),
       ),
     );
   }

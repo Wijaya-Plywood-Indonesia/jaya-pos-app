@@ -13,6 +13,8 @@ import '../pos/pos_widgets.dart';
 import '../pos/sync_controller.dart';
 import '../queue/queue_controller.dart';
 import '../queue/queue_screen.dart';
+import '../report/report_screen.dart';
+import '../stock/stock_screen.dart';
 
 const _navBg = Color(0xFF111111);
 const _navIdle = Color(0xFF9CA3AF);
@@ -85,20 +87,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         'Stok',
         'Stok dan resep',
         Icons.inventory_2_outlined,
-        () => const _ComingSoon(
-          icon: Icons.inventory_2_outlined,
-          text: 'Stok bahan baku, restock, dan resep.',
-        ),
+        () => const StockScreen(),
       ),
       if (isOwner)
         _TabDef(
           'Laporan',
           'Laporan',
           Icons.show_chart,
-          () => const _ComingSoon(
-            icon: Icons.show_chart,
-            text: 'Omset, laba rugi, menu terlaris, dan ekspor.',
-          ),
+          () => const ReportScreen(),
         ),
     ];
 

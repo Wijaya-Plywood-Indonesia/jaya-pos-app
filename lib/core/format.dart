@@ -47,3 +47,6 @@ class RupiahInputFormatter extends TextInputFormatter {
     );
   }
 }
+
+/// Jumlah bahan: 2400 -> "2.400", 12.5 -> "12,5".
+String fmtQty(double n) => NumberFormat('#,##0.#', 'id_ID').format(n);

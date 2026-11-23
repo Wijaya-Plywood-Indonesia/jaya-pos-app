@@ -173,6 +173,9 @@ class Product {
     required this.optionGroupIds,
     this.categoryId,
     this.imagePath,
+    this.portions,
+    this.hpp,
+    this.recipe = const [],
   });
 
   final int id;
@@ -182,6 +185,13 @@ class Product {
   final int? categoryId;
   final String? imagePath;
   final List<int> optionGroupIds;
+
+  /// Sisa porsi menurut stok bahan. null = menu tanpa resep (tanpa batas).
+  final int? portions;
+
+  /// HPP dan resep: hanya dikirim server untuk owner dan manajer.
+  final int? hpp;
+  final List<RecipeLine> recipe;
 
   factory Product.fromJson(Map<String, dynamic> j) => Product(
         id: (j['id'] as num).toInt(),
@@ -193,6 +203,57 @@ class Product {
         optionGroupIds: ((j['option_group_ids'] as List?) ?? const [])
             .map((e) => (e as num).toInt())
             .toList(),
+        portions: (j['portions'] as num?)?.toInt(),
+        hpp: (j['hpp'] as num?)?.toInt(),
+        recipe: _list(j['recipe'], RecipeLine.fromJson),
+      );
+}
+
+/// Satu baris resep: takaran satu bahan untuk satu porsi.
+class RecipeLine {
+  const RecipeLine({required this.ingredientId, required this.quantity});
+
+  final int ingredientId;
+  final double quantity;
+
+  factory RecipeLine.fromJson(Map<String, dynamic> j) => RecipeLine(
+        ingredientId: (j['ingredient_id'] as num).toInt(),
+        quantity: (j['quantity'] as num).toDouble(),
+      );
+}
+
+/// Bahan baku beserta stoknya. Harga per satuan hanya untuk owner dan manajer.
+class IngredientInfo {
+  const IngredientInfo({
+    required this.id,
+    required this.name,
+    required this.unit,
+    required this.stock,
+    required this.minStock,
+    this.costPerUnit,
+    this.isSweetener = false,
+  });
+
+  final int id;
+  final String name;
+  final String unit;
+  final double stock;
+  final double minStock;
+  final double? costPerUnit;
+  final bool isSweetener;
+
+  bool get isOut => stock <= 0;
+
+  bool get isLow => stock <= minStock;
+
+  factory IngredientInfo.fromJson(Map<String, dynamic> j) => IngredientInfo(
+        id: (j['id'] as num).toInt(),
+        name: j['name'] as String,
+        unit: j['unit'] as String,
+        stock: (j['stock'] as num).toDouble(),
+        minStock: (j['min_stock'] as num?)?.toDouble() ?? 0,
+        costPerUnit: (j['cost_per_unit'] as num?)?.toDouble(),
+        isSweetener: (j['is_sweetener'] as bool?) ?? false,
       );
 }
 
@@ -263,6 +324,7 @@ class MenuData {
     required this.products,
     required this.tables,
     this.discounts = const [],
+    this.ingredients = const [],
   });
 
   final List<MenuCategory> categories;
@@ -270,6 +332,7 @@ class MenuData {
   final List<Product> products;
   final List<DiningTableInfo> tables;
   final List<DiscountInfo> discounts;
+  final List<IngredientInfo> ingredients;
 
   factory MenuData.fromJson(Map<String, dynamic> j) => MenuData(
         categories: _list(j['categories'], MenuCategory.fromJson),
@@ -277,6 +340,7 @@ class MenuData {
         products: _list(j['products'], Product.fromJson),
         tables: _list(j['tables'], DiningTableInfo.fromJson),
         discounts: _list(j['discounts'], DiscountInfo.fromJson),
+        ingredients: _list(j['ingredients'], IngredientInfo.fromJson),
       );
 }
 

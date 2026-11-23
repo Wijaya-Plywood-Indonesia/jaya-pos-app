@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,12 +12,14 @@ import '../../data/models.dart';
 import '../../data/order_models.dart';
 import '../session/online_controller.dart';
 import '../session/session_controller.dart';
+import '../stock/stock_controller.dart';
 import 'cart_controller.dart';
 import 'cart_panel.dart';
 import 'option_sheet.dart';
 import 'pay_sheet.dart';
 import 'pos_widgets.dart';
 import 'receipt_sheet.dart';
+import 'sync_controller.dart';
 
 class PosScreen extends ConsumerStatefulWidget {
   const PosScreen({super.key});
@@ -58,6 +62,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         // Perbarui hash PIN kasir untuk login offline berikutnya
         ref.read(sessionProvider.notifier).refreshOfflineStaff();
         ref.read(sessionProvider.notifier).refreshCafe();
+
+        // Stok dari server sudah memuat semua transaksi yang terkirim
+        if (ref.read(syncProvider).pending == 0) {
+          ref.read(soldLocalProvider.notifier).reset();
+        }
       }
     }
 
@@ -70,13 +79,42 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     });
   }
 
+  /// Muat ulang tanpa memutar layar: dipakai setelah transaksi terkirim atau stok dibeli,
+  /// supaya label Habis dan Sisa ikut diperbarui.
+  Future<void> _refreshSilently() async {
+    try {
+      final fresh = await _load();
+      if (!mounted) return;
+
+      setState(() {
+        _menu = Future.value(fresh);
+      });
+    } catch (_) {
+      // Gagal (misalnya offline): biarkan data yang sedang tampil
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Aksi kasir
   // ---------------------------------------------------------------------------
-  Future<void> _openOptions(Product p, MenuData data) async {
+  /// [left] = sisa porsi menurut stok bahan (null = tanpa batas).
+  Future<void> _openOptions(Product p, MenuData data, int? left) async {
     final groups = data.optionGroups.where((g) => p.optionGroupIds.contains(g.id)).toList();
 
-    final line = await showOptionSheet(context, product: p, groups: groups);
+    // Porsi yang sudah ada di keranjang ikut dihitung
+    final inCart = ref
+        .read(cartProvider)
+        .lines
+        .where((l) => l.productId == p.id)
+        .fold<int>(0, (s, l) => s + l.qty);
+    final remaining = left == null ? null : left - inCart;
+
+    if (remaining != null && remaining <= 0) {
+      showToast(context, 'Stok ${p.name} tidak cukup lagi', warn: true);
+      return;
+    }
+
+    final line = await showOptionSheet(context, product: p, groups: groups, maxQty: remaining);
 
     if (line != null && mounted) {
       showToast(context, '${line.name} ×${line.qty} masuk pesanan');
@@ -95,6 +133,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
     final order = await showAppSheet<PaidOrder>(context, (_) => PaySheet(table: table));
     if (order == null || !mounted) return;
+
+    // Kurangi sisa porsi di tablet ini sampai stok terbaru dari server tiba
+    ref.read(soldLocalProvider.notifier).add(order.items);
 
     ref.read(cartProvider.notifier).clear();
     await showReceiptSheet(context, order, isNew: true);
@@ -133,6 +174,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final s = ref.watch(sessionProvider).value;
     if (s == null) return const SizedBox.shrink();
 
+    final sold = ref.watch(soldLocalProvider);
+
+    // Transaksi terkirim ke server (stok di server berkurang) atau stok dibeli: segarkan menu
+    ref.listen(syncProvider.select((x) => x.batchId), (prev, next) {
+      if (prev != next) _refreshSilently();
+    });
+    ref.listen(stockRevisionProvider, (prev, next) => _refreshSilently());
+
     // Token offline berhasil didapat setelah internet kembali: muat menu terbaru
     ref.listen(sessionProvider, (prev, next) {
       final wasOffline = prev?.value?.offline ?? false;
@@ -143,13 +192,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     return FutureBuilder<MenuResult>(
       future: _menu,
       builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
+        // Spinner hanya saat belum ada data sama sekali, bukan saat menyegarkan
+        if (!snap.hasData && snap.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
 
         if (snap.hasError) return _errorView(snap.error);
 
-        return _content(snap.data!, s.baseUrl!);
+        return _content(snap.data!, s.baseUrl!, sold);
       },
     );
   }
@@ -179,7 +229,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     );
   }
 
-  Widget _content(MenuResult result, String baseUrl) {
+  Widget _content(MenuResult result, String baseUrl, Map<int, int> sold) {
     final data = result.data;
 
     return LayoutBuilder(
@@ -187,7 +237,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         // Tablet: katalog di kiri, pesanan aktif menempel di kanan.
         // HP: katalog penuh, pesanan aktif dibuka dari tombol di bawah.
         final wide = c.maxWidth >= 600;
-        final catalog = _catalog(result, baseUrl, wide);
+        final catalog = _catalog(result, baseUrl, wide, sold);
 
         if (wide) {
           return Row(
@@ -220,7 +270,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     );
   }
 
-  Widget _catalog(MenuResult result, String baseUrl, bool wide) {
+  Widget _catalog(MenuResult result, String baseUrl, bool wide, Map<int, int> sold) {
     final data = result.data;
     final accent = Theme.of(context).colorScheme.primary;
     final q = _query.trim().toLowerCase();
@@ -335,10 +385,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     itemBuilder: (_, i) {
                       final p = products[i];
 
+                      // Sisa porsi dari server, dikurangi yang sudah terjual di tablet ini
+                      final left = p.portions == null
+                          ? null
+                          : math.max(0, p.portions! - (sold[p.id] ?? 0));
+                      final soldOut = !p.isAvailable || (left != null && left <= 0);
+
                       return _ProductCard(
                         product: p,
                         baseUrl: baseUrl,
-                        onTap: p.isAvailable ? () => _openOptions(p, data) : null,
+                        left: left,
+                        onTap: soldOut ? null : () => _openOptions(p, data, left),
                       );
                     },
                   ),
@@ -446,10 +503,14 @@ class _ProductCard extends StatelessWidget {
     required this.product,
     required this.baseUrl,
     required this.onTap,
+    this.left,
   });
 
   final Product product;
   final String baseUrl;
+
+  /// Sisa porsi menurut stok bahan. null = tanpa batas.
+  final int? left;
 
   /// null = menu habis, tidak bisa diketuk.
   final VoidCallback? onTap;
@@ -457,6 +518,8 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
+    final soldOut = !product.isAvailable || (left != null && left! <= 0);
+    final low = !soldOut && left != null && left! <= 5;
 
     Widget placeholder() => Container(
           color: accent.withValues(alpha: 0.12),
@@ -474,7 +537,7 @@ class _ProductCard extends StatelessWidget {
     final path = product.imagePath;
 
     return Opacity(
-      opacity: product.isAvailable ? 1 : 0.5,
+      opacity: soldOut ? 0.5 : 1,
       child: Material(
         color: AppColors.card(context),
         shape: RoundedRectangleBorder(
@@ -499,7 +562,27 @@ class _ProductCard extends StatelessWidget {
                       )
                     else
                       placeholder(),
-                    if (!product.isAvailable)
+                    if (low)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Text(
+                            'Sisa $left',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (soldOut)
                       Positioned(
                         top: 8,
                         right: 8,

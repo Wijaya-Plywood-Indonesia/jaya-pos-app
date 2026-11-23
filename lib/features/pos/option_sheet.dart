@@ -14,18 +14,22 @@ Future<CartLine?> showOptionSheet(
   BuildContext context, {
   required Product product,
   required List<OptionGroup> groups,
+  int? maxQty,
 }) {
   return showAppSheet<CartLine>(
     context,
-    (_) => OptionSheet(product: product, groups: groups),
+    (_) => OptionSheet(product: product, groups: groups, maxQty: maxQty),
   );
 }
 
 class OptionSheet extends ConsumerStatefulWidget {
-  const OptionSheet({super.key, required this.product, required this.groups});
+  const OptionSheet({super.key, required this.product, required this.groups, this.maxQty});
 
   final Product product;
   final List<OptionGroup> groups;
+
+  /// Batas jumlah menurut sisa stok bahan. null = tanpa batas.
+  final int? maxQty;
 
   @override
   ConsumerState<OptionSheet> createState() => _OptionSheetState();
@@ -139,9 +143,15 @@ class _OptionSheetState extends ConsumerState<OptionSheet> {
                   value: _qty,
                   size: 40,
                   min: 1,
+                  max: widget.maxQty ?? 99,
                   onChanged: (v) => setState(() => _qty = v),
                 ),
               ),
+              if (widget.maxQty != null && widget.maxQty! <= 5)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: SubText('Stok bahan hanya cukup untuk ${widget.maxQty} porsi lagi'),
+                ),
             ],
           ),
           Column(

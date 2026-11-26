@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "id.jayacafe.jaya_pos_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

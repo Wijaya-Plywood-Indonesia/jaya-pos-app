@@ -8,6 +8,8 @@ import '../../core/theme_mode.dart';
 import '../../core/widgets.dart';
 import '../../data/shift_repository.dart';
 import '../pos/pos_widgets.dart';
+import '../printer/printer_controller.dart';
+import '../printer/printer_sheet.dart';
 import '../session/logout_flow.dart';
 import '../session/session_controller.dart';
 import 'shift_controller.dart';
@@ -176,6 +178,7 @@ class _AccountSheet extends ConsumerWidget {
           ),
           _ShiftInfoCard(shift: shift),
           const _ThemePicker(),
+          const _PrinterRow(),
           DarkButton(
             label: 'Tutup shift',
             onPressed: shift == null
@@ -189,6 +192,33 @@ class _AccountSheet extends ConsumerWidget {
           SoftButton(label: 'Tutup', onPressed: () => Navigator.pop(context)),
         ],
       ),
+    );
+  }
+}
+
+/// Jalan pintas ke pengaturan printer struk.
+class _PrinterRow extends ConsumerWidget {
+  const _PrinterRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pr = ref.watch(printerProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const FieldLabel('Printer struk'),
+        SizedBox(
+          width: double.infinity,
+          child: PickButton(
+            label: pr.hasPrinter
+                ? '${pr.name ?? pr.mac} · ${pr.paperMm} mm'
+                : 'Belum dipilih · ketuk untuk mengatur',
+            selected: false,
+            onTap: () => showPrinterSheet(context),
+          ),
+        ),
+      ],
     );
   }
 }

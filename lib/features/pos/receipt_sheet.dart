@@ -6,6 +6,8 @@ import '../../core/format.dart';
 import '../../core/sheet.dart';
 import '../../data/models.dart';
 import '../../data/order_models.dart';
+import '../printer/printer_controller.dart';
+import '../printer/printer_sheet.dart';
 import '../session/session_controller.dart';
 import 'pos_widgets.dart';
 
@@ -32,23 +34,73 @@ class ReceiptSheet extends ConsumerStatefulWidget {
 }
 
 class _ReceiptSheetState extends ConsumerState<ReceiptSheet> {
-  bool _printTried = false;
+  bool _printing = false;
+  PrintResult? _printResult;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Struk baru: cetak otomatis bila printer sudah dipilih dan fitur ini dinyalakan
+    if (widget.isNew) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final pr = ref.read(printerProvider);
+        if (mounted && pr.auto && pr.hasPrinter) _print();
+      });
+    }
+  }
+
+  Future<void> _print() async {
+    setState(() {
+      _printing = true;
+      _printResult = null;
+    });
+
+    final cafe = ref.read(sessionProvider).value?.cafe;
+    final res = await ref.read(printerProvider.notifier).printReceipt(widget.order, cafe);
+
+    if (!mounted) return;
+    setState(() {
+      _printing = false;
+      _printResult = res;
+    });
+  }
+
+  Future<void> _openSettings() async {
+    await showPrinterSheet(context);
+  }
+
+  Future<void> _onPrintTap() async {
+    // Belum ada printer: buka pengaturan dulu, lalu cetak bila sudah dipilih
+    if (!ref.read(printerProvider).hasPrinter) {
+      await _openSettings();
+      if (!mounted || !ref.read(printerProvider).hasPrinter) return;
+    }
+
+    await _print();
+  }
 
   @override
   Widget build(BuildContext context) {
     final cafe = ref.watch(sessionProvider.select((s) => s.value?.cafe));
+    final res = _printResult;
 
     return AppSheet(
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ReceiptBody(order: widget.order, cafe: cafe, isNew: widget.isNew),
-          if (_printTried) ...[
+          if (_printing) ...[
             const SizedBox(height: 12),
-            const NoteBox(
-              'Printer Bluetooth belum tersambung. Fitur cetak dibuat di langkah 8.',
-              amber: true,
-            ),
+            const NoteBox('Mencetak struk...'),
+          ] else if (res != null) ...[
+            const SizedBox(height: 12),
+            NoteBox(res.message, amber: !res.ok),
+            if (!res.ok)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(onPressed: _openSettings, child: const Text('Atur printer')),
+              ),
           ],
         ],
       ),
@@ -57,8 +109,8 @@ class _ReceiptSheetState extends ConsumerState<ReceiptSheet> {
         children: [
           Expanded(
             child: TintButton(
-              label: widget.isNew ? 'Cetak struk' : 'Cetak ulang',
-              onPressed: () => setState(() => _printTried = true),
+              label: _printing ? 'Mencetak...' : (widget.isNew ? 'Cetak struk' : 'Cetak ulang'),
+              onPressed: _printing ? null : _onPrintTap,
             ),
           ),
           Expanded(

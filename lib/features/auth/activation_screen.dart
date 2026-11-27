@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api.dart';
 import '../../core/theme.dart';
@@ -36,6 +37,22 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     _code.dispose();
     _slug.dispose();
     super.dispose();
+  }
+
+  /// Buka halaman pendaftaran di browser, memakai alamat server yang sedang diisi.
+  Future<void> _openSignup() async {
+    var base = _url.text.trim();
+    if (!base.startsWith('http://') && !base.startsWith('https://')) {
+      base = 'http://$base';
+    }
+    while (base.endsWith('/')) {
+      base = base.substring(0, base.length - 1);
+    }
+
+    final ok = await launchUrl(Uri.parse('$base/daftar'), mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      setState(() => _error = 'Tidak bisa membuka browser. Buka $base/daftar secara manual.');
+    }
   }
 
   Future<void> _submit() async {
@@ -188,6 +205,13 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
                         child: Text(_useCafeCode ? 'Pakai kode aktivasi' : 'Pakai kode cafe'),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 4),
+                  Center(
+                    child: TextButton(
+                      onPressed: _busy ? null : _openSignup,
+                      child: const Text('Belum punya cafe? Daftar gratis'),
+                    ),
                   ),
                 ],
               ),

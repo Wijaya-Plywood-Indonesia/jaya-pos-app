@@ -14,23 +14,34 @@ class ActivationScreen extends ConsumerStatefulWidget {
 }
 
 class _ActivationScreenState extends ConsumerState<ActivationScreen> {
-  // 10.0.2.2 = alamat komputer Anda dari dalam emulator Android.
-  // Untuk HP/tablet asli, isi dengan IP laptop, contoh http://192.168.1.10:8000
-  final _url = TextEditingController(text: 'http://10.0.2.2:8000');
+  // Alamat server bawaan. Untuk rilis, build dengan:
+  //   flutter build apk --dart-define=JAYA_SERVER_URL=https://api.domainmu.com
+  // Tanpa itu, dipakai 10.0.2.2 (alamat komputer dari dalam emulator Android).
+  static const _defaultServer = String.fromEnvironment(
+    'JAYA_SERVER_URL',
+    defaultValue: 'http://10.0.2.2:8000',
+  );
+
+  final _url = TextEditingController(text: _defaultServer);
+  final _code = TextEditingController();
   final _slug = TextEditingController();
   bool _busy = false;
+  bool _advanced = false;
+  bool _useCafeCode = false;
   String? _error;
 
   @override
   void dispose() {
     _url.dispose();
+    _code.dispose();
     _slug.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    if (_slug.text.trim().isEmpty) {
-      setState(() => _error = 'Masukkan kode cafe.');
+    final empty = _useCafeCode ? _slug.text.trim().isEmpty : _code.text.trim().isEmpty;
+    if (empty) {
+      setState(() => _error = _useCafeCode ? 'Masukkan kode cafe.' : 'Masukkan kode aktivasi.');
       return;
     }
 
@@ -40,7 +51,12 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     });
 
     try {
-      await ref.read(sessionProvider.notifier).activate(_url.text, _slug.text);
+      final session = ref.read(sessionProvider.notifier);
+      if (_useCafeCode) {
+        await session.activate(_url.text, _slug.text);
+      } else {
+        await session.activateWithCode(_url.text, _code.text);
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -77,26 +93,54 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Masukkan kode cafe dari owner. Langkah ini hanya sekali.',
+                    _useCafeCode
+                        ? 'Masukkan alamat server dan kode cafe dari owner.'
+                        : 'Masukkan kode aktivasi dari owner (menu Perangkat di panel admin). Langkah ini hanya sekali.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.muted(context)),
                   ),
                   const SizedBox(height: 24),
-                  TextField(
-                    controller: _url,
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    decoration: _decoration('Alamat server'),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: _slug,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _submit(),
-                    decoration: _decoration('Kode cafe', hint: 'contoh: jaya-cafe'),
-                  ),
+                  if (_useCafeCode) ...[
+                    TextField(
+                      controller: _url,
+                      keyboardType: TextInputType.url,
+                      autocorrect: false,
+                      decoration: _decoration('Alamat server'),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _slug,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      decoration: _decoration('Kode cafe', hint: 'contoh: jaya-cafe'),
+                    ),
+                  ] else ...[
+                    TextField(
+                      controller: _code,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      textCapitalization: TextCapitalization.characters,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 3,
+                      ),
+                      decoration: _decoration('Kode aktivasi', hint: 'XXXX-XXXX'),
+                    ),
+                    if (_advanced) ...[
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _url,
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        decoration: _decoration('Alamat server'),
+                      ),
+                    ],
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -126,6 +170,24 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
                             ),
                           )
                         : const Text('Aktifkan'),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (!_useCafeCode)
+                        TextButton(
+                          onPressed: () => setState(() => _advanced = !_advanced),
+                          child: Text(_advanced ? 'Sembunyikan alamat server' : 'Ubah alamat server'),
+                        ),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _useCafeCode = !_useCafeCode;
+                          _error = null;
+                        }),
+                        child: Text(_useCafeCode ? 'Pakai kode aktivasi' : 'Pakai kode cafe'),
+                      ),
+                    ],
                   ),
                 ],
               ),

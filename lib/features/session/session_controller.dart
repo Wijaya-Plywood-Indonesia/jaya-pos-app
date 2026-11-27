@@ -105,6 +105,20 @@ class SessionController extends AsyncNotifier<SessionState> {
     );
   }
 
+  /// Aktivasi dengan kode sekali pakai dari panel admin (menu Perangkat).
+  /// Server menukar kode dengan kode cafe, lalu alurnya sama dengan [activate].
+  Future<void> activateWithCode(String baseUrl, String activationCode) async {
+    final url = _normalizeUrl(baseUrl);
+    final json = await Api(url).post('/devices/activate', data: {'code': activationCode.trim()});
+    final slug = json['cafe_slug'] as String?;
+
+    if (slug == null || slug.isEmpty) {
+      throw ApiException('Respons server tidak dikenali.');
+    }
+
+    await activate(url, slug);
+  }
+
   /// Login dengan PIN. Melempar ApiException bila gagal.
   ///
   /// Online dulu. Bila server tidak terjangkau dan akun ini kasir yang hash PIN-nya

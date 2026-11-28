@@ -9,6 +9,7 @@ import '../../data/order_models.dart';
 import '../session/online_controller.dart';
 import '../session/session_controller.dart';
 import '../shift/shift_controller.dart';
+import '../shift/shift_widgets.dart';
 import 'cart_controller.dart';
 import 'order_controller.dart';
 import 'pos_widgets.dart';
@@ -64,9 +65,23 @@ class _PaySheetState extends ConsumerState<PaySheet> {
     }
 
     final session = ref.read(sessionProvider).value;
-    final shift = ref.read(shiftProvider).value;
+    var shift = ref.read(shiftProvider).value;
     final cafe = session?.cafe;
     final user = session?.user;
+
+    // Owner tidak diblokir saat membuka aplikasi, jadi kas awal diminta di sini
+    // (setiap transaksi harus tercatat pada sebuah shift).
+    if (cafe != null && user != null && shift == null && user.role == 'owner') {
+      final opened = await showAppSheet<bool>(
+        context,
+        (sheetContext) => ShiftOpenCard(
+          onOpened: () => Navigator.pop(sheetContext, true),
+          onCancel: () => Navigator.pop(sheetContext, false),
+        ),
+      );
+      if (!mounted || opened != true) return;
+      shift = ref.read(shiftProvider).value;
+    }
 
     if (cafe == null || user == null || shift == null) {
       setState(() => _saveError = 'Shift belum dibuka.');

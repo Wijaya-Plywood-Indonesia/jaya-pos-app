@@ -21,7 +21,8 @@ class ThemeModeController extends Notifier<ThemeMode> {
     return switch (ref.read(prefsProvider).getString(_key)) {
       'light' => ThemeMode.light,
       'dark' => ThemeMode.dark,
-      _ => ThemeMode.system,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.light, // bawaan: terang
     };
   }
 

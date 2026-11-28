@@ -130,7 +130,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             wide
                 ? Row(children: [nav, Expanded(child: content)])
                 : Column(children: [Expanded(child: content), nav]),
-            // Belum ada shift: kasir wajib mengisi kas awal dulu
+            // Belum ada shift: kasir wajib mengisi kas awal dulu.
+            // Owner tidak diblokir; kas awal baru diminta saat owner mau menerima pembayaran.
             if (shift.isLoading)
               const Positioned.fill(
                 child: ColoredBox(
@@ -138,7 +139,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   child: Center(child: CircularProgressIndicator()),
                 ),
               )
-            else if (shift.hasValue && shift.value == null)
+            else if (shift.hasValue && shift.value == null && !isOwner)
               const Positioned.fill(child: _ShiftGate()),
           ],
         ),

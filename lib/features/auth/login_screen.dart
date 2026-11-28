@@ -165,7 +165,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     final cafe = ref.watch(sessionProvider).value?.cafe;
-    final cafeName = cafe?.name ?? 'Jaya POS';
+    final cafeName = cafe?.name ?? 'Mawra POS';
 
     return Scaffold(
       body: SafeArea(

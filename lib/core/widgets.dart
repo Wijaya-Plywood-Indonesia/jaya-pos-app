@@ -31,6 +31,27 @@ class BrandMark extends StatelessWidget {
   }
 }
 
+/// Logo Mawra POS (ikon merah). Jika file gambar belum terpasang, tampil huruf M sebagai cadangan.
+class MawraLogo extends StatelessWidget {
+  const MawraLogo({super.key, this.size = 56});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.225),
+      child: Image.asset(
+        'assets/brand/mawra_icon.png',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => BrandMark(letter: 'M', size: size),
+      ),
+    );
+  }
+}
+
 class Avatar extends StatelessWidget {
   const Avatar({super.key, required this.name, this.owner = false, this.size = 40});
 

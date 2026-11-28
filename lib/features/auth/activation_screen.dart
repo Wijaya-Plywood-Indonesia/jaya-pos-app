@@ -101,7 +101,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Center(child: BrandMark(letter: 'J', size: 56)),
+                  const Center(child: MawraLogo(size: 64)),
                   const SizedBox(height: 16),
                   const Text(
                     'Aktifkan perangkat',

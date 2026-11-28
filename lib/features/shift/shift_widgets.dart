@@ -21,7 +21,13 @@ const _methodLabels = {'cash': 'Tunai', 'qris': 'QRIS', 'card': 'Debit'};
 // Kartu "Buka shift": menutupi layar sampai kas awal diisi
 // ---------------------------------------------------------------------------
 class ShiftOpenCard extends ConsumerStatefulWidget {
-  const ShiftOpenCard({super.key});
+  const ShiftOpenCard({super.key, this.onOpened, this.onCancel});
+
+  /// Dipanggil setelah shift berhasil dibuka (dipakai saat kartu tampil sebagai sheet).
+  final VoidCallback? onOpened;
+
+  /// Bila diisi, tombol kiri menjadi "Batal" (menggantikan "Ganti akun").
+  final VoidCallback? onCancel;
 
   @override
   ConsumerState<ShiftOpenCard> createState() => _ShiftOpenCardState();
@@ -53,6 +59,7 @@ class _ShiftOpenCardState extends ConsumerState<ShiftOpenCard> {
 
     try {
       await ref.read(shiftProvider.notifier).open(_value);
+      widget.onOpened?.call();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -109,8 +116,10 @@ class _ShiftOpenCardState extends ConsumerState<ShiftOpenCard> {
         children: [
           Expanded(
             child: SoftButton(
-              label: 'Ganti akun',
-              onPressed: _busy ? null : () => confirmLogout(context, ref),
+              label: widget.onCancel != null ? 'Batal' : 'Ganti akun',
+              onPressed: _busy
+                  ? null
+                  : (widget.onCancel ?? () => confirmLogout(context, ref)),
             ),
           ),
           Expanded(

@@ -41,7 +41,7 @@ class JayaApp extends ConsumerWidget {
     final accent = AppColors.parse(session?.cafe?.themeColor);
 
     return MaterialApp(
-      title: 'Jaya POS',
+      title: 'Mawra POS',
       debugShowCheckedModeBanner: false,
       themeMode: ref.watch(themeModeProvider),
       theme: AppColors.theme(Brightness.light, accent),
